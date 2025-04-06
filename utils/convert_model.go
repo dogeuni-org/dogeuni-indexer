@@ -20,19 +20,19 @@ func ConvetCard(inscription *models.Drc20Inscription) (*models.Drc20Info, error)
 		card.Dec = 8
 	}
 
-	amt, err := ConvetStringToNumber(inscription.Amt)
+	amt, err := ConvertStringToNumber(inscription.Amt)
 	if err != nil {
 		return nil, err
 	}
 	card.Amt = amt
 
-	max, err := ConvetStringToNumber(inscription.Max)
+	max, err := ConvertStringToNumber(inscription.Max)
 	if err != nil {
 		return nil, err
 	}
 	card.Max = max
 
-	lim, err := ConvetStringToNumber(inscription.Lim)
+	lim, err := ConvertStringToNumber(inscription.Lim)
 	if err != nil {
 		return nil, err
 	}
@@ -50,12 +50,12 @@ func ConvetSwap(inscription *models.SwapInscription) (*models.SwapInfo, error) {
 	}
 
 	var err error
-	swap.Amt0, err = ConvetStringToNumber(inscription.Amt0)
+	swap.Amt0, err = ConvertStringToNumber(inscription.Amt0)
 	if err != nil {
 		return nil, err
 	}
 
-	swap.Amt1, err = ConvetStringToNumber(inscription.Amt1)
+	swap.Amt1, err = ConvertStringToNumber(inscription.Amt1)
 	if err != nil {
 		return nil, err
 	}
@@ -65,25 +65,25 @@ func ConvetSwap(inscription *models.SwapInscription) (*models.SwapInfo, error) {
 	swap.Amt1Min = models.NewNumber(0)
 
 	if swap.Op == "swap" {
-		swap.Amt1Min, err = ConvetStringToNumber(inscription.Amt1Min)
+		swap.Amt1Min, err = ConvertStringToNumber(inscription.Amt1Min)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	if swap.Op == "create" || swap.Op == "add" {
-		swap.Amt0Min, err = ConvetStringToNumber(inscription.Amt0Min)
+		swap.Amt0Min, err = ConvertStringToNumber(inscription.Amt0Min)
 		if err != nil {
 			return nil, err
 		}
-		swap.Amt1Min, err = ConvetStringToNumber(inscription.Amt1Min)
+		swap.Amt1Min, err = ConvertStringToNumber(inscription.Amt1Min)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	if swap.Op == "remove" {
-		swap.Liquidity, err = ConvetStringToNumber(inscription.Liquidity)
+		swap.Liquidity, err = ConvertStringToNumber(inscription.Liquidity)
 		if err != nil {
 			return nil, err
 		}
@@ -104,7 +104,7 @@ func ConvertWDoge(inscription *models.WDogeInscription) (*models.WDogeInfo, erro
 	}
 
 	var err error
-	swap.Amt, err = ConvetStringToNumber(inscription.Amt)
+	swap.Amt, err = ConvertStringToNumber(inscription.Amt)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +123,7 @@ func ConvertCross(inscription *models.CrossInscription) (*models.CrossInfo, erro
 	}
 
 	var err error
-	swap.Amt, err = ConvetStringToNumber(inscription.Amt)
+	swap.Amt, err = ConvertStringToNumber(inscription.Amt)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +178,7 @@ func ConvertStake(inscription *models.StakeInscription) (*models.StakeInfo, erro
 	}
 
 	var err error
-	stake.Amt, err = ConvetStringToNumber(inscription.Amt)
+	stake.Amt, err = ConvertStringToNumber(inscription.Amt)
 	if err != nil {
 		return nil, err
 	}
@@ -188,24 +188,25 @@ func ConvertStake(inscription *models.StakeInscription) (*models.StakeInfo, erro
 
 func ConvertStakeV2(inscription *models.StakeV2Inscription) (*models.StakeV2Info, error) {
 	stake := &models.StakeV2Info{
-		Op:      inscription.Op,
-		Tick0:   strings.ToUpper(inscription.Tick0),
-		Tick1:   strings.ToUpper(inscription.Tick1),
-		StakeId: inscription.StakeId,
+		Op:        inscription.Op,
+		Tick0:     strings.ToUpper(inscription.Tick0),
+		Tick1:     strings.ToUpper(inscription.Tick1),
+		StakeId:   inscription.StakeId,
+		LockBlock: inscription.LockBlock,
 	}
 
 	var err error
-	stake.Amt, err = ConvetStringToNumber(inscription.Amt)
+	stake.Amt, err = ConvertStringToNumber(inscription.Amt)
 	if err != nil {
 		return nil, err
 	}
 
-	stake.Reward, err = ConvetStringToNumber(inscription.Reward)
+	stake.Reward, err = ConvertStringToNumber(inscription.Reward)
 	if err != nil {
 		return nil, err
 	}
 
-	stake.EachReward, err = ConvetStringToNumber(inscription.EachReward)
+	stake.EachReward, err = ConvertStringToNumber(inscription.EachReward)
 	if err != nil {
 		return nil, err
 	}
@@ -222,12 +223,12 @@ func ConvertExChange(inscription *models.ExchangeInscription) (*models.ExchangeI
 	}
 
 	var err error
-	ex.Amt0, err = ConvetStringToNumber(inscription.Amt0)
+	ex.Amt0, err = ConvertStringToNumber(inscription.Amt0)
 	if err != nil {
 		return nil, err
 	}
 
-	ex.Amt1, err = ConvetStringToNumber(inscription.Amt1)
+	ex.Amt1, err = ConvertStringToNumber(inscription.Amt1)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +246,7 @@ func ConvertFileExchange(inscription *models.FileExchangeInscription) (*models.F
 	}
 
 	var err error
-	ex.Amt, err = ConvetStringToNumber(inscription.Amt)
+	ex.Amt, err = ConvertStringToNumber(inscription.Amt)
 	if err != nil {
 		return nil, err
 	}
@@ -261,25 +262,153 @@ func ConvertBox(inscription *models.BoxInscription) (*models.BoxInfo, error) {
 	}
 
 	var err error
-	box.Amt0, err = ConvetStringToNumber(inscription.Amt0)
+	box.Amt0, err = ConvertStringToNumber(inscription.Amt0)
 	if err != nil {
 		return nil, err
 	}
 
-	box.LiqAmt, err = ConvetStringToNumber(inscription.LiqAmt)
+	box.LiqAmt, err = ConvertStringToNumber(inscription.LiqAmt)
 	if err != nil {
 		return nil, err
 	}
 
-	box.Max, err = ConvetStringToNumber(inscription.Max)
+	box.Max, err = ConvertStringToNumber(inscription.Max)
 	if err != nil {
 		return nil, err
 	}
 
-	box.Amt1, err = ConvetStringToNumber(inscription.Amt1)
+	box.Amt1, err = ConvertStringToNumber(inscription.Amt1)
 	if err != nil {
 		return nil, err
 	}
 	return box, nil
 
+}
+
+func ConvertMeme(inscription *models.Meme20Inscription) (*models.Meme20Info, error) {
+
+	card := &models.Meme20Info{
+		P:      inscription.P,
+		Op:     inscription.Op,
+		Tick:   inscription.Tick,
+		TickId: inscription.TickId,
+		Name:   inscription.Name,
+	}
+
+	amt, err := ConvertStringToNumber(inscription.Amt)
+	if err != nil {
+		return nil, err
+	}
+	card.Amt = amt
+
+	max_, err := ConvertStringToNumber(inscription.Max)
+	if err != nil {
+		return nil, err
+	}
+	card.Max = max_
+
+	return card, nil
+}
+
+func ConvertSwapV2(inscription *models.SwapV2Inscription) (*models.SwapV2Info, error) {
+	swap := &models.SwapV2Info{
+		Op:      inscription.Op,
+		PairId:  inscription.PairId,
+		Tick0Id: inscription.Tick0Id,
+		Tick1Id: inscription.Tick1Id,
+		Doge:    inscription.Doge,
+	}
+
+	var err error
+	swap.Amt0, err = ConvertStringToNumber(inscription.Amt0)
+	if err != nil {
+		return nil, err
+	}
+
+	swap.Amt1, err = ConvertStringToNumber(inscription.Amt1)
+	if err != nil {
+		return nil, err
+	}
+
+	swap.Liquidity = models.NewNumber(0)
+	swap.Amt0Min = models.NewNumber(0)
+	swap.Amt1Min = models.NewNumber(0)
+
+	if swap.Op == "swap" {
+		swap.Amt1Min, err = ConvertStringToNumber(inscription.Amt1Min)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if swap.Op == "create" || swap.Op == "add" {
+		swap.Amt0Min, err = ConvertStringToNumber(inscription.Amt0Min)
+		if err != nil {
+			return nil, err
+		}
+		swap.Amt1Min, err = ConvertStringToNumber(inscription.Amt1Min)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if swap.Op == "remove" {
+		swap.Liquidity, err = ConvertStringToNumber(inscription.Liquidity)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return swap, nil
+}
+
+func ConvertPump(inscription *models.PumpInscription) (*models.PumpInfo, error) {
+	pump := &models.PumpInfo{
+		Op:      inscription.Op,
+		PairId:  inscription.PairId,
+		Tick0Id: inscription.Tick0Id,
+		Tick1Id: inscription.Tick1Id,
+		Name:    inscription.Name,
+		Symbol:  inscription.Symbol,
+		Logo:    inscription.Logo,
+		Reserve: inscription.Reserve,
+		Doge:    inscription.Doge,
+	}
+
+	var err error
+	if inscription.Op == "deploy" {
+
+		pump.Tick0 = inscription.Symbol
+		pump.Tick1Id = inscription.Tick
+
+		pump.Amt1, err = ConvertStringToNumber(inscription.Amt)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if inscription.Op == "trade" {
+		pump.Amt0, err = ConvertStringToNumber(inscription.Amt0)
+		if err != nil {
+			return nil, err
+		}
+
+		pump.Amt1Min, err = ConvertStringToNumber(inscription.Amt1Min)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return pump, nil
+}
+
+func ConvertInvite(inscription *models.InviteInscription) (*models.InviteInfo, error) {
+
+	card := &models.InviteInfo{
+		P:             inscription.P,
+		Op:            inscription.Op,
+		InviteAddress: inscription.InviteAddress,
+	}
+
+	return card, nil
 }

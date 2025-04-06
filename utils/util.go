@@ -18,7 +18,7 @@ var (
 	MAX_NUMBER, _ = big.NewInt(0).SetString("99999999999999999999999999999999999999999", 10)
 )
 
-func ConvetStr(number string) (*big.Int, error) {
+func ConvertStr(number string) (*big.Int, error) {
 	if number != "" {
 		max_big, is_ok := new(big.Int).SetString(number, 10)
 		if !is_ok {
@@ -29,7 +29,7 @@ func ConvetStr(number string) (*big.Int, error) {
 	return big.NewInt(0), nil
 }
 
-func ConvetStringToNumber(number string) (*models.Number, error) {
+func ConvertStringToNumber(number string) (*models.Number, error) {
 	if number != "" {
 		num, is_ok := new(models.Number).SetString(number, 10)
 		if !is_ok {
@@ -239,4 +239,27 @@ func GetAddressFromSig(msg string, sig string) (string, error) {
 	}
 
 	return inadress.String(), nil
+}
+
+func IntervalToSecond(dateInterval string) int64 {
+	switch dateInterval {
+	case "1m":
+		return 60
+	case "5m":
+		return 300
+	case "15m":
+		return 900
+	case "1h":
+		return 3600
+	case "4h":
+		return 14400
+	case "1d":
+		return 86400
+	case "1w":
+		return 604800
+	case "1M":
+		return 2592000
+	default:
+		return 0
+	}
 }

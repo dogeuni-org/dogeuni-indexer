@@ -93,8 +93,8 @@ func NewMysqlClient(cfg utils.MysqlConfig) *DBClient {
 	return conn
 }
 
-func (conn *DBClient) Stop() {
-	sqlDB, err := conn.DB.DB()
+func (db *DBClient) Stop() {
+	sqlDB, err := db.DB.DB()
 	if err != nil {
 		fmt.Printf("get db failed,err:%v  ", err)
 		return

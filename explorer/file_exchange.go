@@ -10,6 +10,7 @@ import (
 	"github.com/dogecoinw/doged/btcutil"
 	"github.com/dogecoinw/doged/chaincfg"
 	"github.com/dogecoinw/doged/chaincfg/chainhash"
+	"github.com/dogecoinw/go-dogecoin/log"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"time"
@@ -165,4 +166,64 @@ func (e *Explorer) fileExchangeCancel(ex *models.FileExchangeInfo) error {
 		return nil
 	}
 	return nil
+}
+
+func (e *Explorer) fileExchangeFork(tx *gorm.DB, height int64) error {
+
+	log.Info("fork", "file_exchange", height)
+	// FileExchange
+	var fileExchangeReverts []*models.FileExchangeRevert
+	err := tx.Model(&models.FileExchangeRevert{}).
+		Where("block_number > ?", height).
+		Order("id desc").
+		Find(&fileExchangeReverts).Error
+
+	if err != nil {
+		return fmt.Errorf("exchangeFork error: %v", err)
+	}
+
+	for _, revert := range fileExchangeReverts {
+		if revert.Op == "create" {
+			err = tx.Where("ex_id = ?", revert.ExId).Delete(&models.FileExchangeCollect{}).Error
+			if err != nil {
+				return fmt.Errorf("delete error: %v", err)
+			}
+		}
+
+		if revert.Op == "trade" {
+
+			ec := &models.FileExchangeCollect{}
+			err = tx.Where("ex_id = ?", revert.ExId).First(ec).Error
+			if err != nil {
+				return fmt.Errorf("error: %v", err)
+			}
+
+			err = tx.Model(&models.ExchangeCollect{}).
+				Where("ex_id = ?", revert.ExId).
+				Updates(map[string]interface{}{
+					"amt_finish": models.NewNumber(0),
+				}).Error
+
+			if err != nil {
+				return fmt.Errorf("update exchange_collect error: %v", err)
+			}
+		}
+
+		if revert.Op == "cancel" {
+
+			ec := &models.ExchangeCollect{}
+			err = tx.Where("ex_id = ?", revert.ExId).First(ec).Error
+			if err != nil {
+				return fmt.Errorf("select exchange_collect error: %v", err)
+			}
+
+			err = tx.Model(&models.ExchangeCollect{}).Where("ex_id = ?", revert.ExId).Update("amt_finish", models.NewNumber(0)).Error
+			if err != nil {
+				return fmt.Errorf("update exchange_collect error: %v", err)
+			}
+		}
+	}
+
+	return nil
+
 }

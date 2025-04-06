@@ -14,58 +14,56 @@ import (
 	"math/big"
 )
 
-func (e *Explorer) swapRouterDecode(tx *btcjson.TxRawResult, height int64) ([]*models.SwapInfo, error) {
+func (e *Explorer) swapV2RouterDecode(tx *btcjson.TxRawResult, height int64) ([]*models.SwapV2Info, error) {
 
-	err := e.dbc.DB.Where("tx_hash = ?", tx.Hash).First(&models.SwapInfo{}).Error
+	err := e.dbc.DB.Where("tx_hash = ?", tx.Hash).First(&models.SwapV2Info{}).Error
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, fmt.Errorf("swap already exist or err %s", tx.Hash)
 	}
 
 	temp := 0
-	swaps := make([]*models.SwapInfo, 0)
+	swaps := make([]*models.SwapV2Info, 0)
 	dogeDepositAmt := big.NewInt(0)
 	for i, in := range tx.Vin {
 		decode, pushedData, err := e.reDecode(in)
-		if err == nil && decode.P == "pair-v1" {
-			log.Trace("scanning", "verifyReDecode", err, "txhash", tx.Txid)
+		if err == nil && decode.P == "pair-v2" {
 			temp++
 		}
 
-		param := &models.SwapInscription{}
+		param := &models.SwapV2Inscription{}
 		err = json.Unmarshal(pushedData, param)
 		if err != nil {
 			return nil, fmt.Errorf("json Unmarshal err: %s", err.Error())
 		}
 
-		swap, err := utils.ConvetSwap(param)
+		swap, err := utils.ConvertSwapV2(param)
 		if err != nil {
 			return nil, fmt.Errorf("ConvertSwap err: %s", err.Error())
 		}
 
 		if swap.Doge == 1 {
-
 			if swap.Op == "create" {
-				if swap.Tick0 == "WDOGE(WRAPPED-DOGE)" {
+				if swap.Tick0Id == "WDOGE(WRAPPED-DOGE)" {
 					dogeDepositAmt.Add(dogeDepositAmt, swap.Amt0.Int())
 				}
 
-				if swap.Tick1 == "WDOGE(WRAPPED-DOGE)" {
+				if swap.Tick1Id == "WDOGE(WRAPPED-DOGE)" {
 					dogeDepositAmt.Add(dogeDepositAmt, swap.Amt1.Int())
 				}
 			}
 
 			if swap.Op == "add" {
-				if swap.Tick0 == "WDOGE(WRAPPED-DOGE)" {
+				if swap.Tick0Id == "WDOGE(WRAPPED-DOGE)" {
 					dogeDepositAmt.Add(dogeDepositAmt, swap.Amt0.Int())
 				}
 
-				if swap.Tick1 == "WDOGE(WRAPPED-DOGE)" {
+				if swap.Tick1Id == "WDOGE(WRAPPED-DOGE)" {
 					dogeDepositAmt.Add(dogeDepositAmt, swap.Amt1.Int())
 				}
 			}
 
 			if swap.Op == "swap" {
-				if swap.Tick0 == "WDOGE(WRAPPED-DOGE)" {
+				if swap.Tick0Id == "WDOGE(WRAPPED-DOGE)" {
 					dogeDepositAmt.Add(dogeDepositAmt, swap.Amt0.Int())
 				}
 			}
@@ -78,6 +76,7 @@ func (e *Explorer) swapRouterDecode(tx *btcjson.TxRawResult, height int64) ([]*m
 		swap.TxIndex = i
 		swap.BlockHash = tx.BlockHash
 		swap.BlockNumber = height
+		swap.BlockTime = tx.Blocktime
 		swap.HolderAddress = tx.Vout[0].ScriptPubKey.Addresses[0]
 		swap.OrderStatus = 1
 
@@ -143,18 +142,18 @@ func (e *Explorer) swapRouterDecode(tx *btcjson.TxRawResult, height int64) ([]*m
 	return swaps, nil
 }
 
-func (e *Explorer) swapCreate(db *gorm.DB, swap *models.SwapInfo) error {
+func (e *Explorer) swapV2Create(db *gorm.DB, swap *models.SwapV2Info) error {
 
 	log.Info("explorer", "p", "swap", "op", "create", "tx_hash", swap.TxHash)
-	swap.Tick0, swap.Tick1, swap.Amt0, swap.Amt1, swap.Amt0Min, swap.Amt1Min = utils.SortTokens(swap.Tick0, swap.Tick1, swap.Amt0, swap.Amt1, swap.Amt0Min, swap.Amt1Min)
+	swap.Tick0Id, swap.Tick1Id, swap.Amt0, swap.Amt1, swap.Amt0Min, swap.Amt1Min = utils.SortTokens(swap.Tick0Id, swap.Tick1Id, swap.Amt0, swap.Amt1, swap.Amt0Min, swap.Amt1Min)
 
-	err := e.dbc.SwapCreate(db, swap)
+	err := e.dbc.SwapV2Create(db, swap)
 	if err != nil {
 		return fmt.Errorf("swapCreate Create err: %s", err.Error())
 	}
 
 	update := map[string]interface{}{"order_status": 0, "amt0_out": swap.Amt0Out.String(), "amt1_out": swap.Amt1Out.String(), "liquidity": swap.Liquidity.String()}
-	err = db.Model(&models.SwapInfo{}).Where("tx_hash = ? and tx_index = ?", swap.TxHash, swap.TxIndex).Updates(update).Error
+	err = db.Model(&models.SwapV2Info{}).Where("tx_hash = ? and tx_index = ?", swap.TxHash, swap.TxIndex).Updates(update).Error
 	if err != nil {
 		return fmt.Errorf("swapCreate Update err: %s", err.Error())
 	}
@@ -162,18 +161,25 @@ func (e *Explorer) swapCreate(db *gorm.DB, swap *models.SwapInfo) error {
 	return nil
 }
 
-func (e *Explorer) swapAdd(db *gorm.DB, swap *models.SwapInfo) error {
+func (e *Explorer) swapV2Add(db *gorm.DB, swap *models.SwapV2Info) error {
 
 	log.Info("explorer", "p", "swap", "op", "add", "tx_hash", swap.TxHash)
-	swap.Tick0, swap.Tick1, swap.Amt0, swap.Amt1, swap.Amt0Min, swap.Amt1Min = utils.SortTokens(swap.Tick0, swap.Tick1, swap.Amt0, swap.Amt1, swap.Amt0Min, swap.Amt1Min)
-
-	err := e.dbc.SwapAdd(db, swap)
+	err := e.dbc.SwapV2Add(db, swap)
 	if err != nil {
 		return fmt.Errorf("swapAdd Add err: %s", err.Error())
 	}
 
-	update := map[string]interface{}{"order_status": 0, "amt0_out": swap.Amt0Out.String(), "amt1_out": swap.Amt1Out.String(), "liquidity": swap.Liquidity.String()}
-	err = db.Model(&models.SwapInfo{}).Where("tx_hash = ? and tx_index = ?", swap.TxHash, swap.TxIndex).Updates(update).Error
+	update := map[string]interface{}{
+		"order_status": 0,
+		"tick0":        swap.Tick0,
+		"tick0_id":     swap.Tick0Id,
+		"tick1":        swap.Tick1,
+		"tick1_id":     swap.Tick1Id,
+		"amt0_out":     swap.Amt0Out.String(),
+		"amt1_out":     swap.Amt1Out.String(),
+		"liquidity":    swap.Liquidity.String(),
+	}
+	err = db.Model(&models.SwapV2Info{}).Where("tx_hash = ? and tx_index = ?", swap.TxHash, swap.TxIndex).Updates(update).Error
 	if err != nil {
 		return fmt.Errorf("swapCreate Update err: %s", err.Error())
 	}
@@ -181,20 +187,24 @@ func (e *Explorer) swapAdd(db *gorm.DB, swap *models.SwapInfo) error {
 	return nil
 }
 
-func (e *Explorer) swapRemove(db *gorm.DB, swap *models.SwapInfo) error {
+func (e *Explorer) swapV2Remove(db *gorm.DB, swap *models.SwapV2Info) error {
 
 	log.Info("explorer", "p", "swap", "op", "remove", "tx_hash", swap.TxHash)
-
-	swap.Tick0, swap.Tick1, _, _, _, _ = utils.SortTokens(swap.Tick0, swap.Tick1, nil, nil, nil, nil)
-
-	err := e.dbc.SwapRemove(db, swap)
+	err := e.dbc.SwapV2Remove(db, swap)
 	if err != nil {
 		return fmt.Errorf("swapRemove SwapRemove error: %v", err)
 	}
 
-	//amt0_out = ?, amt1_out = ?,
-	update := map[string]interface{}{"order_status": 0, "amt0_out": swap.Amt0Out.String(), "amt1_out": swap.Amt1Out.String()}
-	err = db.Model(&models.SwapInfo{}).Where("tx_hash = ? and tx_index = ?", swap.TxHash, swap.TxIndex).Updates(update).Error
+	update := map[string]interface{}{
+		"order_status": 0,
+		"amt0_out":     swap.Amt0Out.String(),
+		"amt1_out":     swap.Amt1Out.String(),
+		"tick0":        swap.Tick0,
+		"tick0_id":     swap.Tick0Id,
+		"tick1":        swap.Tick1,
+		"tick1_id":     swap.Tick1Id,
+	}
+	err = db.Model(&models.SwapV2Info{}).Where("tx_hash = ? and tx_index = ?", swap.TxHash, swap.TxIndex).Updates(update).Error
 	if err != nil {
 		return fmt.Errorf("swapRemove Update err: %s", err.Error())
 	}
@@ -202,17 +212,23 @@ func (e *Explorer) swapRemove(db *gorm.DB, swap *models.SwapInfo) error {
 	return nil
 }
 
-func (e *Explorer) swapExec(db *gorm.DB, swap *models.SwapInfo) error {
+func (e *Explorer) swapV2Exec(db *gorm.DB, swap *models.SwapV2Info) error {
 
 	log.Info("explorer", "p", "swap", "op", "exec", "tx_hash", swap.TxHash)
 
-	err := e.dbc.SwapExec(db, swap)
+	err := e.dbc.SwapV2Exec(db, swap)
 	if err != nil {
 		return fmt.Errorf("swapExec error: %v", err)
 	}
 
-	update := map[string]interface{}{"order_status": 0, "amt1_out": swap.Amt1Out.String()}
-	err = db.Model(&models.SwapInfo{}).Where("tx_hash = ? and tx_index = ?", swap.TxHash, swap.TxIndex).Updates(update).Error
+	update := map[string]interface{}{
+		"order_status": 0,
+		"amt1_out":     swap.Amt1Out.String(),
+		"tick0":        swap.Tick0,
+		"tick1":        swap.Tick1,
+		"tick1_id":     swap.Tick1Id,
+	}
+	err = db.Model(&models.SwapV2Info{}).Where("tx_hash = ? and tx_index = ?", swap.TxHash, swap.TxIndex).Updates(update).Error
 	if err != nil {
 		return fmt.Errorf("swapExec Update err: %s", err.Error())
 	}
@@ -220,43 +236,41 @@ func (e *Explorer) swapExec(db *gorm.DB, swap *models.SwapInfo) error {
 	return nil
 }
 
-func (e *Explorer) swapFork(tx *gorm.DB, height int64) error {
-
-	log.Info("fork", "swap", height)
-	var swapReverts []*models.SwapRevert
+func (e *Explorer) swapV2Fork(tx *gorm.DB, height int64) error {
+	log.Info("fork", "swap_v2", height)
+	var reverts []*models.SwapV2Revert
 	err := tx.Model(&models.StakeRevert{}).
 		Where("block_number > ?", height).
 		Order("id desc").
-		Find(&swapReverts).Error
+		Find(&reverts).Error
 
 	if err != nil {
-		return fmt.Errorf("FindSwapRevert error: %v", err)
+		return fmt.Errorf("revert error: %v", err)
 	}
 
-	for _, revert := range swapReverts {
+	for _, revert := range reverts {
 		if revert.Op == "create" {
-			err := tx.Delete(&models.SwapLiquidity{}, "tick = ?", revert.Tick).Error
+			err := tx.Delete(&models.SwapV2Liquidity{}, "pair_id = ?", revert.PairId).Error
 			if err != nil {
 				return err
 			}
 
-			err = tx.Delete(&models.Drc20Collect{}, "tick = ?", revert.Tick).Error
+			err = tx.Delete(&models.Meme20Collect{}, "tick_id = ?", revert.PairId).Error
 			if err != nil {
 				return err
 			}
 
-			err = tx.Delete(&models.Drc20CollectAddress{}, "tick = ?", revert.Tick).Error
+			err = tx.Delete(&models.Meme20CollectAddress{}, "tick_id = ?", revert.PairId).Error
 			if err != nil {
 				return err
 			}
 		}
 	}
 
-	// swap
-	err = e.dbc.UpdateLiquidityFork(tx)
+	err = e.dbc.UpdateV2LiquidityFork(tx)
 	if err != nil {
 		return err
 	}
 
-	return nil
+	return err
 }

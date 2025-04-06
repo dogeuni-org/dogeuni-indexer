@@ -6,7 +6,7 @@ import (
 	"math/big"
 )
 
-func (e *DBClient) ExchangeCreate(tx *gorm.DB, ex *models.ExchangeInfo, reservesAddress string) error {
+func (db *DBClient) ExchangeCreate(tx *gorm.DB, ex *models.ExchangeInfo, reservesAddress string) error {
 
 	ec := &models.ExchangeCollect{
 		ExId:            ex.ExId,
@@ -23,7 +23,7 @@ func (e *DBClient) ExchangeCreate(tx *gorm.DB, ex *models.ExchangeInfo, reserves
 		return err
 	}
 
-	err = e.TransferDrc20(tx, ex.Tick0, ex.HolderAddress, reservesAddress, ex.Amt0.Int(), ex.TxHash, ex.BlockNumber, false)
+	err = db.TransferDrc20(tx, ex.Tick0, ex.HolderAddress, reservesAddress, ex.Amt0.Int(), ex.TxHash, ex.BlockNumber, false)
 	if err != nil {
 		return err
 	}
@@ -42,7 +42,7 @@ func (e *DBClient) ExchangeCreate(tx *gorm.DB, ex *models.ExchangeInfo, reserves
 	return nil
 }
 
-func (e *DBClient) ExchangeTrade(tx *gorm.DB, ex *models.ExchangeInfo) error {
+func (db *DBClient) ExchangeTrade(tx *gorm.DB, ex *models.ExchangeInfo) error {
 
 	exc := &models.ExchangeCollect{}
 	err := tx.Where("ex_id = ?", ex.ExId).First(exc).Error
@@ -81,12 +81,12 @@ func (e *DBClient) ExchangeTrade(tx *gorm.DB, ex *models.ExchangeInfo) error {
 	ex.Tick1 = exc.Tick1
 	ex.Amt0 = (*models.Number)(amt0Out)
 
-	err = e.TransferDrc20(tx, exc.Tick1, ex.HolderAddress, exc.HolderAddress, ex.Amt1.Int(), ex.TxHash, ex.BlockNumber, false)
+	err = db.TransferDrc20(tx, exc.Tick1, ex.HolderAddress, exc.HolderAddress, ex.Amt1.Int(), ex.TxHash, ex.BlockNumber, false)
 	if err != nil {
 		return err
 	}
 
-	err = e.TransferDrc20(tx, exc.Tick0, exc.ReservesAddress, ex.HolderAddress, amt0Out, ex.TxHash, ex.BlockNumber, false)
+	err = db.TransferDrc20(tx, exc.Tick0, exc.ReservesAddress, ex.HolderAddress, amt0Out, ex.TxHash, ex.BlockNumber, false)
 	if err != nil {
 		return err
 	}
@@ -95,7 +95,7 @@ func (e *DBClient) ExchangeTrade(tx *gorm.DB, ex *models.ExchangeInfo) error {
 
 }
 
-func (e *DBClient) ExchangeCancel(tx *gorm.DB, ex *models.ExchangeInfo) error {
+func (db *DBClient) ExchangeCancel(tx *gorm.DB, ex *models.ExchangeInfo) error {
 
 	exc := &models.ExchangeCollect{}
 	err := tx.Where("ex_id = ?", ex.ExId).First(exc).Error
@@ -103,7 +103,7 @@ func (e *DBClient) ExchangeCancel(tx *gorm.DB, ex *models.ExchangeInfo) error {
 		return err
 	}
 
-	err = e.TransferDrc20(tx, exc.Tick0, exc.ReservesAddress, ex.HolderAddress, ex.Amt0.Int(), ex.TxHash, ex.BlockNumber, false)
+	err = db.TransferDrc20(tx, exc.Tick0, exc.ReservesAddress, ex.HolderAddress, ex.Amt0.Int(), ex.TxHash, ex.BlockNumber, false)
 	if err != nil {
 		return err
 	}

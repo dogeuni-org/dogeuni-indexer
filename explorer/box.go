@@ -10,6 +10,7 @@ import (
 	"github.com/dogecoinw/doged/btcutil"
 	"github.com/dogecoinw/doged/chaincfg"
 	"github.com/dogecoinw/doged/chaincfg/chainhash"
+	"github.com/dogecoinw/go-dogecoin/log"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -21,7 +22,6 @@ func (e *Explorer) boxDecode(tx *btcjson.TxRawResult, pushedData []byte, number 
 		return nil, fmt.Errorf("box already exist or err %s", tx.Hash)
 	}
 
-	// 解析数据
 	param := &models.BoxInscription{}
 	err = json.Unmarshal(pushedData, param)
 	if err != nil {
@@ -108,7 +108,14 @@ func (e *Explorer) boxMint(box *models.BoxInfo) error {
 		return err
 	}
 
-	err = tx.Model(&models.BoxInfo{}).Where("tx_hash = ?", box.TxHash).Update("order_status", 0).Error
+	updates := map[string]interface{}{
+		"tick1":        box.Tick1,
+		"max_":         box.Max,
+		"amt0":         box.Amt0,
+		"order_status": 0,
+	}
+
+	err = tx.Model(&models.BoxInfo{}).Where("tx_hash = ?", box.TxHash).Updates(updates).Error
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -121,4 +128,78 @@ func (e *Explorer) boxMint(box *models.BoxInfo) error {
 	}
 
 	return nil
+}
+
+func (e *Explorer) boxFork(tx *gorm.DB, height int64) error {
+
+	log.Info("fork", "box", height)
+
+	// box
+	err := tx.Exec("update box_collect a, drc20_collect_address b set a.liqamt_finish = b.amt_sum where a.tick1 = b.tick and a.reserves_address = b.holder_address").Error
+	if err != nil {
+		return fmt.Errorf("update box_collect error: %v", err)
+	}
+
+	err = tx.Where("block_number > ?", height).Delete(&models.BoxCollectAddress{}).Error
+	if err != nil {
+		return fmt.Errorf("DeleteBoxCollectAddress error: %v", err)
+	}
+
+	var boxReverts []*models.BoxRevert
+	err = tx.Model(&models.BoxRevert{}).
+		Where("block_number > ?", height).
+		Order("id desc").
+		Find(&boxReverts).Error
+
+	if err != nil {
+		return fmt.Errorf("box revert error: %v", err)
+	}
+
+	for _, revert := range boxReverts {
+		if revert.Op == "deploy" {
+
+			err = tx.Where("tick = ?", revert.Tick0).Delete(&models.Drc20Collect{}).Error
+			if err != nil {
+				return fmt.Errorf("delete drc20_collect error: %v", err)
+			}
+
+			err = tx.Where("tick0 = ?", revert.Tick0).Delete(&models.BoxCollect{}).Error
+			if err != nil {
+				return fmt.Errorf("delete box_collect error: %v", err)
+			}
+		}
+
+		if revert.Op == "finish" {
+			err = tx.Where("tick0 = ? and tick1 = ?", revert.Tick0, revert.Tick1).Delete(&models.SwapLiquidity{}).Error
+			if err != nil {
+				return fmt.Errorf("delete swap_info error: %v", err)
+			}
+		}
+
+		if revert.Op == "refund-drc20" {
+
+			drc20c := &models.Drc20Collect{
+				Tick:          revert.Tick0,
+				Max:           revert.Max,
+				Dec:           8,
+				HolderAddress: revert.HolderAddress,
+				TxHash:        revert.TxHash,
+			}
+
+			err := tx.Create(drc20c).Error
+			if err != nil {
+				return fmt.Errorf("create drc20_collect error: %v", err)
+			}
+		}
+	}
+
+	err = tx.Model(&models.BoxCollect{}).
+		Where("liqblock > ?", height).
+		Update("is_del", 0).Error
+	if err != nil {
+		return fmt.Errorf("update box_collect error: %v", err)
+	}
+
+	return nil
+
 }

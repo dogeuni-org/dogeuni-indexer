@@ -10,20 +10,20 @@ import (
 	"time"
 )
 
-func (e *DBClient) ScheduledTasks(height int64) error {
+func (db *DBClient) ScheduledTasks(height int64) error {
 
 	s := time.Now()
 
 	//if height < 5260645 {
-	//	err = e.StakeUpdatePoolScheduled(tx, height)
+	//	err = db.StakeUpdatePoolScheduled(tx, height)
 	//	if err != nil {
 	//		tx.Rollback()
 	//		return err
 	//	}
 	//}
 
-	tx := e.DB.Begin()
-	err := e.BoxDeployScheduled(tx, height)
+	tx := db.DB.Begin()
+	err := db.BoxDeployScheduled(tx, height)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -39,9 +39,9 @@ func (e *DBClient) ScheduledTasks(height int64) error {
 	return nil
 }
 
-func (e *DBClient) TransferDrc20(tx *gorm.DB, tick, from, to string, amt *big.Int, txHash string, height int64, fork bool) error {
-	e.lock.Lock()
-	defer e.lock.Unlock()
+func (db *DBClient) TransferDrc20(tx *gorm.DB, tick, from, to string, amt *big.Int, txHash string, height int64, fork bool) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
 	log.Info("explorer", "Transfer", "start", "tick", tick, "from", from, "to", to, "amt", amt.String(), "fork", fork)
 
 	if amt.Cmp(big.NewInt(0)) < 1 {
@@ -59,7 +59,7 @@ func (e *DBClient) TransferDrc20(tx *gorm.DB, tick, from, to string, amt *big.In
 	}
 
 	if amt.Cmp(addFrom.AmtSum.Int()) > 0 {
-		return fmt.Errorf("insufficient balance : %s tick: %s from : %s  balance : %s  transfer : %s", amt.String(), tick, from, amt.String(), addFrom.AmtSum.String())
+		return fmt.Errorf("insufficient balance : %s tick: %s from : %s  transfer : %s", addFrom.AmtSum.String(), tick, from, amt.String())
 	}
 
 	addTo := &models.Drc20CollectAddress{}
@@ -112,9 +112,9 @@ func (e *DBClient) TransferDrc20(tx *gorm.DB, tick, from, to string, amt *big.In
 	return nil
 }
 
-func (e *DBClient) MintDrc20(tx *gorm.DB, tick, holderAddress string, amt *big.Int, txHash string, height int64, fork bool) error {
-	e.lock.Lock()
-	defer e.lock.Unlock()
+func (db *DBClient) MintDrc20(tx *gorm.DB, tick, holderAddress string, amt *big.Int, txHash string, height int64, fork bool) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
 	log.Info("explorer", "Mint", "start", "tick", tick, "holderAddress", holderAddress, "amt", amt.String())
 
 	drc20c := &models.Drc20Collect{}
@@ -181,43 +181,32 @@ func (e *DBClient) MintDrc20(tx *gorm.DB, tick, holderAddress string, amt *big.I
 	return nil
 }
 
-func (e *DBClient) BurnDrc20(tx *gorm.DB, tick, holderAddress string, amt *big.Int, txHash string, height int64, fork bool) error {
-	e.lock.Lock()
-	defer e.lock.Unlock()
+func (db *DBClient) BurnDrc20(tx *gorm.DB, tick, holderAddress string, amt *big.Int, txHash string, height int64, fork bool) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
 	log.Info("explorer", "Burn", "start", "tick", tick, "holderAddress", holderAddress, "amt", amt.String())
 
 	drc20c := &models.Drc20Collect{}
 	err := tx.Where("tick = ?", tick).First(drc20c).Error
 	if err != nil {
-		return fmt.Errorf("Burn FindDrc20InfoByTick err: %s tick: %s", err.Error(), tick)
+		return fmt.Errorf("burn err: %s tick: %s", err.Error(), tick)
 	}
 
 	drc20ca := &models.Drc20CollectAddress{}
-
 	err = tx.Where("tick = ? and holder_address = ?", tick, holderAddress).First(drc20ca).Error
 	if err != nil {
-		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("mint FindDrc20AddressInfoByTick err: %s tick: %s from : %s", err.Error(), tick, holderAddress)
-		}
-
-		drc20ca.AmtSum = (*models.Number)(big.NewInt(0))
-		drc20ca.Tick = tick
-		drc20ca.HolderAddress = holderAddress
-		err := tx.Create(drc20ca).Error
-		if err != nil {
-			return fmt.Errorf("mint CreateAddressBalanceMint err: %s tick: %s from : %s", err.Error(), tick, holderAddress)
-		}
+		return fmt.Errorf("burn err: %s tick: %s from : %s", err.Error(), tick, holderAddress)
 	}
 
 	count := drc20c.AmtSum.Int()
 	count1 := drc20ca.AmtSum.Int()
 
 	if count.Cmp(amt) == -1 {
-		return fmt.Errorf("forkBack count < amount")
+		return fmt.Errorf("burn count < amount tick: %s count: %s amount: %s", tick, count.String(), amt.String())
 	}
 
 	if count1.Cmp(amt) == -1 {
-		return fmt.Errorf("forkBack count1 < amount")
+		return fmt.Errorf("burn count1 < amount tick: %s count1: %s amount: %s", tick, count1.String(), amt.String())
 	}
 
 	sum := big.NewInt(0).Sub(count, amt)
@@ -258,9 +247,9 @@ func (e *DBClient) BurnDrc20(tx *gorm.DB, tick, holderAddress string, amt *big.I
 	return nil
 }
 
-func (e *DBClient) TransferFile(tx *gorm.DB, from, to string, fileId string, txHash string, height int64, fork bool) error {
-	e.lock.Lock()
-	defer e.lock.Unlock()
+func (db *DBClient) TransferFile(tx *gorm.DB, from, to string, fileId string, txHash string, height int64, fork bool) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
 	log.Info("explorer", "TransferFile", "start", "from", from, "to", to, "fileId", fileId, "fork", fork)
 
 	err := tx.Model(&models.FileCollectAddress{}).Where("file_id = ? AND holder_address = ?", fileId, from).Update("holder_address", to).Error
@@ -285,9 +274,9 @@ func (e *DBClient) TransferFile(tx *gorm.DB, from, to string, fileId string, txH
 	return nil
 }
 
-func (e *DBClient) StakeStakeV1(tx *gorm.DB, tick, holderAddress string, amt *big.Int, txHash string, height int64, fork bool) error {
-	e.lock.Lock()
-	defer e.lock.Unlock()
+func (db *DBClient) StakeStakeV1(tx *gorm.DB, tick, holderAddress string, amt *big.Int, txHash string, height int64, fork bool) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
 	log.Info("explorer", "stake", "start", "tick", tick, "holderAddress", holderAddress, "amt", amt.String())
 
 	stakec := &models.StakeCollect{}
@@ -344,9 +333,9 @@ func (e *DBClient) StakeStakeV1(tx *gorm.DB, tick, holderAddress string, amt *bi
 	return nil
 }
 
-func (e *DBClient) StakeUnStakeV1(tx *gorm.DB, tick, holderAddress string, amt *big.Int, txHash string, height int64, fork bool) error {
-	e.lock.Lock()
-	defer e.lock.Unlock()
+func (db *DBClient) StakeUnStakeV1(tx *gorm.DB, tick, holderAddress string, amt *big.Int, txHash string, height int64, fork bool) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
 	log.Info("explorer", "unstake", "start", "tick", tick, "holderAddress", holderAddress, "amt", amt.String())
 
 	stakec := &models.StakeCollect{}
@@ -398,9 +387,9 @@ func (e *DBClient) StakeUnStakeV1(tx *gorm.DB, tick, holderAddress string, amt *
 	return nil
 }
 
-func (e *DBClient) StakeRewardV1(tx *gorm.DB, tick, holderAddress string, txHash string, height int64) error {
-	e.lock.Lock()
-	defer e.lock.Unlock()
+func (db *DBClient) StakeRewardV1(tx *gorm.DB, tick, holderAddress string, txHash string, height int64) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
 
 	stakeca := &models.StakeCollectAddress{}
 	err := tx.Where("tick = ? and holder_address = ?", tick, holderAddress).First(stakeca).Error
@@ -431,7 +420,7 @@ func (e *DBClient) StakeRewardV1(tx *gorm.DB, tick, holderAddress string, txHash
 	return nil
 }
 
-func (e *DBClient) StakeGetRewardV1(tx *gorm.DB, holderAddress, tick string) ([]*models.HolderReward, error) {
+func (db *DBClient) StakeGetRewardV1(tx *gorm.DB, holderAddress, tick string) ([]*models.HolderReward, error) {
 
 	poolResults := make([]*models.Drc20CollectAddress, 0)
 	err := tx.Where("holder_address = ? and amt_sum != '0'", stakePoolAddress).Find(&poolResults).Error
@@ -490,7 +479,7 @@ func (e *DBClient) StakeGetRewardV1(tx *gorm.DB, holderAddress, tick string) ([]
 	return rewards, nil
 }
 
-func (e *DBClient) BoxDeployScheduled(tx *gorm.DB, height int64) error {
+func (db *DBClient) BoxDeployScheduled(tx *gorm.DB, height int64) error {
 
 	bcs := make([]*models.BoxCollect, 0)
 	err := tx.Where("liqblock = ? and is_del = 0", height).Find(&bcs).Error
@@ -500,12 +489,12 @@ func (e *DBClient) BoxDeployScheduled(tx *gorm.DB, height int64) error {
 
 	for _, bc := range bcs {
 		if bc.LiqAmtFinish.Int().Cmp(big.NewInt(0)) > 0 {
-			err = e.BoxFinish(tx, bc, height)
+			err = db.BoxFinish(tx, bc, height)
 			if err != nil {
 				return err
 			}
 		} else {
-			err = e.BoxRefund(tx, bc, height)
+			err = db.BoxRefund(tx, bc, height)
 			if err != nil {
 				return err
 			}
@@ -515,16 +504,16 @@ func (e *DBClient) BoxDeployScheduled(tx *gorm.DB, height int64) error {
 	return nil
 }
 
-func (e *DBClient) StakeGetRewardV2(holderAddress, stakeId string, height int64) (*models.Number, error) {
+func (db *DBClient) StakeGetRewardV2(stakeId, holderAddress string, height int64) (*models.Number, error) {
 
 	stakea := &models.StakeV2CollectAddress{}
-	err := e.DB.Where("stake_id = ? AND holder_address = ?", stakeId, holderAddress).First(stakea).Error
+	err := db.DB.Where("stake_id = ? AND holder_address = ?", stakeId, holderAddress).First(stakea).Error
 	if err != nil {
 		return nil, err
 	}
 
 	stake := &models.StakeV2Collect{}
-	err = e.DB.Where("stake_id = ?", stakeId).First(stake).Error
+	err = db.DB.Where("stake_id = ?", stakeId).First(stake).Error
 	if err != nil {
 		return nil, err
 	}
@@ -545,4 +534,265 @@ func (e *DBClient) StakeGetRewardV2(holderAddress, stakeId string, height int64)
 	}
 
 	return (*models.Number)(pending), nil
+}
+
+func (db *DBClient) TransferMeme20(tx *gorm.DB, tickId, from, to string, amt *big.Int, txHash string, height int64, fork bool) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+	log.Info("explorer", "Transfer", "start", "tickId", tickId, "from", from, "to", to, "amt", amt.String(), "fork", fork)
+
+	if amt.Cmp(big.NewInt(0)) < 1 {
+		return fmt.Errorf("transfer amt < 0")
+	}
+
+	if from == to {
+		return fmt.Errorf("transfer from and to addresses are the same")
+	}
+
+	addFrom := &models.Meme20CollectAddress{}
+	err := tx.Where("tick_id = ? and holder_address = ?", tickId, from).First(addFrom).Error
+	if err != nil {
+		return fmt.Errorf("transfer err: %s tickId: %s from: %s", err.Error(), tickId, from)
+	}
+
+	if amt.Cmp(addFrom.Amt.Int()) > 0 {
+		return fmt.Errorf("insufficient balance: %s tickId: %s from: %s transfer: %s", addFrom.Amt.String(), tickId, from, amt.String())
+	}
+
+	addTo := &models.Meme20CollectAddress{}
+	err = tx.Where("tick_id = ? and holder_address = ?", tickId, to).First(addTo).Error
+	if err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("transfer err: %s tickId: %s to : %s", err.Error(), tickId, to)
+		}
+
+		addTo.Amt = (*models.Number)(big.NewInt(0))
+		addTo.TickId = tickId
+		addTo.HolderAddress = to
+		err := tx.Create(addTo).Error
+		if err != nil {
+			return fmt.Errorf("mint err: %s tickId: %s to : %s", err.Error(), tickId, to)
+		}
+	}
+
+	count1 := addFrom.Amt.Int()
+	count2 := addTo.Amt.Int()
+
+	sub := big.NewInt(0).Sub(count1, amt)
+	add := big.NewInt(0).Add(count2, amt)
+
+	err = tx.Model(addFrom).Where("tick_id = ? and holder_address = ?", tickId, from).Update("amt", sub.String()).Error
+	if err != nil {
+		return fmt.Errorf("transfer err: %s tick: %s from : %s", err.Error(), tickId, from)
+	}
+
+	err = tx.Model(addTo).Where("tick_id = ? and holder_address = ?", tickId, to).Update("amt", add.String()).Error
+	if err != nil {
+		return fmt.Errorf("transfer err: %s tick: %s to : %s", err.Error(), tickId, to)
+	}
+
+	mc := &models.Meme20Collect{}
+	err = tx.Where("tick_id = ?", tickId).First(mc).Error
+	if err != nil {
+		return fmt.Errorf("transfer err: %s tick: %s", err.Error(), tickId)
+	}
+
+	trans := mc.Transactions + 1
+	if fork {
+		trans = mc.Transactions - 1
+		if trans < 0 {
+			trans = 0
+		}
+	}
+
+	err = tx.Model(mc).Where("tick_id = ?", tickId).Update("transactions", trans).Error
+	if err != nil {
+		return fmt.Errorf("transfer err: %s tick: %s", err.Error(), tickId)
+	}
+
+	if !fork {
+		revert := &models.Meme20Revert{
+			FromAddress: from,
+			ToAddress:   to,
+			TickId:      tickId,
+			Amt:         (*models.Number)(amt),
+			TxHash:      txHash,
+			BlockNumber: height,
+		}
+		err = tx.Create(revert).Error
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *DBClient) MintMeme20(tx *gorm.DB, tickId, holderAddress string, amt *big.Int, txHash string, height int64, fork bool) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+	log.Info("explorer", "Mint meme", "start", "tickId", tickId, "holderAddress", holderAddress, "amt", amt.String())
+
+	meme20c := &models.Meme20Collect{}
+	err := tx.Where("tick_id = ?", tickId).First(meme20c).Error
+	if err != nil {
+		return fmt.Errorf("mint meme err: %s tickId: %s", err.Error(), tickId)
+	}
+
+	meme20ca := &models.Meme20CollectAddress{}
+
+	err = tx.Where("tick_id = ? and holder_address = ?", tickId, holderAddress).First(meme20ca).Error
+	if err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("mint meme err: %s tickId: %s from : %s", err.Error(), tickId, holderAddress)
+		}
+
+		meme20ca.Amt = (*models.Number)(big.NewInt(0))
+		meme20ca.TickId = tickId
+		meme20ca.HolderAddress = holderAddress
+		err := tx.Create(meme20ca).Error
+		if err != nil {
+			return fmt.Errorf("mint meme err: %s tickId: %s from : %s", err.Error(), tickId, holderAddress)
+		}
+	}
+
+	count1 := meme20ca.Amt.Int()
+
+	sum1 := big.NewInt(0).Add(count1, amt)
+
+	trans := meme20ca.Transactions + 1
+	if fork {
+		trans = meme20ca.Transactions - 1
+		if trans < 0 {
+			trans = 0
+		}
+	}
+
+	err = tx.Model(meme20ca).Where("tick_id = ? and holder_address = ?", tickId, holderAddress).Updates(
+		map[string]interface{}{
+			"amt":          sum1.String(),
+			"transactions": trans,
+		}).Error
+	if err != nil {
+		return fmt.Errorf("mint meme err: %s tickId: %s from : %s", err.Error(), tickId, holderAddress)
+	}
+
+	count2 := meme20c.Max.Int()
+	max0 := big.NewInt(0).Add(count2, amt)
+
+	transc := meme20c.Transactions + 1
+	if fork {
+		transc = meme20c.Transactions - 1
+		if transc < 0 {
+			transc = 0
+		}
+	}
+
+	err = tx.Model(meme20c).Where("tick_id = ?", tickId).Updates(
+		map[string]interface{}{
+			"max_":         max0.String(),
+			"transactions": transc,
+		}).Error
+
+	if !fork {
+		revert := &models.Meme20Revert{
+			ToAddress:   holderAddress,
+			TickId:      tickId,
+			Amt:         (*models.Number)(amt),
+			TxHash:      txHash,
+			BlockNumber: height,
+		}
+		err = tx.Create(revert).Error
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *DBClient) BurnMeme20(tx *gorm.DB, tickId, holderAddress string, amt *big.Int, txHash string, height int64, fork bool) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+	log.Info("explorer", "Burn meme", "start", "tickId", tickId, "holderAddress", holderAddress, "amt", amt.String())
+
+	meme20ca := &models.Meme20CollectAddress{}
+	err := tx.Where("tick_id = ? and holder_address = ?", tickId, holderAddress).First(meme20ca).Error
+	if err != nil {
+		return fmt.Errorf("burn meme err: %s tickId: %s from : %s", err.Error(), tickId, holderAddress)
+
+	}
+
+	count1 := meme20ca.Amt.Int()
+
+	if count1.Cmp(amt) == -1 {
+		return fmt.Errorf("burn count1 < amount tickId: %s count1: %s amount: %s", tickId, count1.String(), amt.String())
+	}
+
+	sum1 := big.NewInt(0).Sub(count1, amt)
+
+	trans := meme20ca.Transactions - 1
+	if fork {
+		trans = meme20ca.Transactions + 1
+		if trans < 0 {
+			trans = 0
+		}
+	}
+
+	err = tx.Model(meme20ca).Where("tick_id = ? and holder_address = ?", tickId, holderAddress).Updates(
+		map[string]interface{}{
+			"amt":          sum1.String(),
+			"transactions": trans,
+		}).Error
+
+	if err != nil {
+		return fmt.Errorf("burn meme err: %s tick: %s from : %s", err.Error(), tickId, holderAddress)
+	}
+
+	meme20c := &models.Meme20Collect{}
+	err = tx.Where("tick_id = ?", tickId).First(meme20c).Error
+	if err != nil {
+		return fmt.Errorf("burn meme err: %s tickId: %s", err.Error(), tickId)
+	}
+
+	count2 := meme20c.Max.Int()
+	if count2.Cmp(amt) == -1 {
+		return fmt.Errorf("burn count2 < amount tickId: %s count2: %s amount: %s", tickId, count2.String(), amt.String())
+	}
+
+	max0 := big.NewInt(0).Sub(count2, amt)
+
+	transc := meme20c.Transactions + 1
+	if fork {
+		transc = meme20c.Transactions - 1
+		if transc < 0 {
+			transc = 0
+		}
+	}
+
+	err = tx.Model(meme20c).Where("tick_id = ?", tickId).Updates(
+		map[string]interface{}{
+			"max_":         max0.String(),
+			"transactions": transc,
+		}).Error
+
+	if err != nil {
+		return fmt.Errorf("burn meme err: %s tickId: %s", err.Error(), tickId)
+	}
+
+	if !fork {
+		revert := &models.Meme20Revert{
+			FromAddress: holderAddress,
+			TickId:      tickId,
+			Amt:         (*models.Number)(amt),
+			TxHash:      txHash,
+			BlockNumber: height,
+		}
+		err = tx.Create(revert).Error
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

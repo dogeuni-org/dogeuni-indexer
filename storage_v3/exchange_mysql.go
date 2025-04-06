@@ -92,8 +92,8 @@ func (c *MysqlClient) FindExchangeInfo(orderId, op, exId, tick, tick0, tick1, ho
 		if err != nil {
 			return nil, 0, err
 		}
-		ex.Amt0, _ = utils.ConvetStringToNumber(amt0)
-		ex.Amt1, _ = utils.ConvetStringToNumber(amt1)
+		ex.Amt0, _ = utils.ConvertStringToNumber(amt0)
+		ex.Amt1, _ = utils.ConvertStringToNumber(amt1)
 		exs = append(exs, ex)
 	}
 
@@ -126,8 +126,8 @@ func (c *MysqlClient) FindExchangeInfoByTick(op, tick, holder_address string, li
 		if err != nil {
 			return nil, 0, err
 		}
-		ex.Amt0, _ = utils.ConvetStringToNumber(amt0)
-		ex.Amt1, _ = utils.ConvetStringToNumber(amt1)
+		ex.Amt0, _ = utils.ConvertStringToNumber(amt0)
+		ex.Amt1, _ = utils.ConvertStringToNumber(amt1)
 		exs = append(exs, ex)
 	}
 
@@ -206,10 +206,10 @@ func (c *MysqlClient) FindExchangeCollect(exId, tick0, tick1, holderAddress stri
 		if err != nil {
 			return nil, 0, err
 		}
-		ex.Amt0, _ = utils.ConvetStringToNumber(amt0)
-		ex.Amt1, _ = utils.ConvetStringToNumber(amt1)
-		ex.Amt0Finish, _ = utils.ConvetStringToNumber(amt0_finish)
-		ex.Amt1Finish, _ = utils.ConvetStringToNumber(amt1_finish)
+		ex.Amt0, _ = utils.ConvertStringToNumber(amt0)
+		ex.Amt1, _ = utils.ConvertStringToNumber(amt1)
+		ex.Amt0Finish, _ = utils.ConvertStringToNumber(amt0_finish)
+		ex.Amt1Finish, _ = utils.ConvertStringToNumber(amt1_finish)
 		exs = append(exs, ex)
 	}
 
@@ -427,8 +427,8 @@ func (c *MysqlClient) FindExchangeSummaryK(tick0, tick1, dateInterval string) ([
 			return nil, err
 		}
 
-		result.BaseVolume, _ = utils.ConvetStr(baseVolume)
-		result.QuoteVolume, _ = utils.ConvetStr(quoteVolume)
+		result.BaseVolume, _ = utils.ConvertStr(baseVolume)
+		result.QuoteVolume, _ = utils.ConvertStr(quoteVolume)
 		results = append(results, result)
 	}
 

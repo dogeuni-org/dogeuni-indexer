@@ -14,7 +14,7 @@ const (
 	MINI_LIQUIDITY = 1000
 )
 
-func (e *DBClient) SwapCreate(tx *gorm.DB, swap *models.SwapInfo) error {
+func (db *DBClient) SwapCreate(tx *gorm.DB, swap *models.SwapInfo) error {
 
 	reservesAddress, _ := btcutil.NewAddressScriptHash([]byte(swap.Tick0+swap.Tick1), &chaincfg.MainNetParams)
 	swap.Tick = swap.Tick0 + "-SWAP-" + swap.Tick1
@@ -44,19 +44,19 @@ func (e *DBClient) SwapCreate(tx *gorm.DB, swap *models.SwapInfo) error {
 		return fmt.Errorf("SwapCreate Create err: %s", err.Error())
 	}
 
-	err = e.TransferDrc20(tx, swap.Tick0, swap.HolderAddress, reservesAddress.String(), swap.Amt0.Int(), swap.TxHash, swap.BlockNumber, false)
+	err = db.TransferDrc20(tx, swap.Tick0, swap.HolderAddress, reservesAddress.String(), swap.Amt0.Int(), swap.TxHash, swap.BlockNumber, false)
 	if err != nil {
 		return err
 	}
 
-	err = e.TransferDrc20(tx, swap.Tick1, swap.HolderAddress, reservesAddress.String(), swap.Amt1.Int(), swap.TxHash, swap.BlockNumber, false)
+	err = db.TransferDrc20(tx, swap.Tick1, swap.HolderAddress, reservesAddress.String(), swap.Amt1.Int(), swap.TxHash, swap.BlockNumber, false)
 	if err != nil {
 		return err
 	}
 
 	drc20c := &models.Drc20Collect{
 		Tick:          swap.Tick,
-		Max:           models.NewNumber(-1),
+		Max:           (*models.Number)(utils.MAX_NUMBER),
 		Lim:           models.NewNumber(0),
 		Dec:           8,
 		HolderAddress: reservesAddress.String(),
@@ -65,25 +65,36 @@ func (e *DBClient) SwapCreate(tx *gorm.DB, swap *models.SwapInfo) error {
 
 	err = tx.Create(drc20c).Error
 
-	err = e.MintDrc20(tx, swap.Tick, swap.HolderAddress, liquidityBase, swap.TxHash, swap.BlockNumber, false)
+	err = db.MintDrc20(tx, swap.Tick, swap.HolderAddress, liquidityBase, swap.TxHash, swap.BlockNumber, false)
 	if err != nil {
 		return err
 	}
 
-	err = e.MintDrc20(tx, swap.Tick, reservesAddress.String(), big.NewInt(MINI_LIQUIDITY), swap.TxHash, swap.BlockNumber, false)
+	err = db.MintDrc20(tx, swap.Tick, reservesAddress.String(), big.NewInt(MINI_LIQUIDITY), swap.TxHash, swap.BlockNumber, false)
 	if err != nil {
 		return err
 	}
 
-	err = e.UpdateLiquidity(tx, swap.Tick)
+	err = db.UpdateLiquidity(tx, swap.Tick)
 	if err != nil {
 		return err
+	}
+
+	revert := &models.SwapRevert{
+		Op:          "create",
+		Tick:        swap.Tick,
+		BlockNumber: swap.BlockNumber,
+	}
+
+	err = tx.Create(revert).Error
+	if err != nil {
+		return fmt.Errorf("SwapRevert Create err: %s", err.Error())
 	}
 
 	return nil
 }
 
-func (e *DBClient) SwapAdd(tx *gorm.DB, swap *models.SwapInfo) error {
+func (db *DBClient) SwapAdd(tx *gorm.DB, swap *models.SwapInfo) error {
 
 	reservesAddress, _ := btcutil.NewAddressScriptHash([]byte(swap.Tick0+swap.Tick1), &chaincfg.MainNetParams)
 	swap.Tick = swap.Tick0 + "-SWAP-" + swap.Tick1
@@ -127,26 +138,26 @@ func (e *DBClient) SwapAdd(tx *gorm.DB, swap *models.SwapInfo) error {
 	swap.Amt0Out = (*models.Number)(amt0Out)
 	swap.Amt1Out = (*models.Number)(amt1Out)
 
-	err = e.TransferDrc20(tx, swap.Tick0, swap.HolderAddress, reservesAddress.String(), amt0Out, swap.TxHash, swap.BlockNumber, false)
+	err = db.TransferDrc20(tx, swap.Tick0, swap.HolderAddress, reservesAddress.String(), amt0Out, swap.TxHash, swap.BlockNumber, false)
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
 
-	err = e.TransferDrc20(tx, swap.Tick1, swap.HolderAddress, reservesAddress.String(), amt1Out, swap.TxHash, swap.BlockNumber, false)
+	err = db.TransferDrc20(tx, swap.Tick1, swap.HolderAddress, reservesAddress.String(), amt1Out, swap.TxHash, swap.BlockNumber, false)
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
 
-	err = e.MintDrc20(tx, swap.Tick, swap.HolderAddress, liquidity, swap.TxHash, swap.BlockNumber, false)
+	err = db.MintDrc20(tx, swap.Tick, swap.HolderAddress, liquidity, swap.TxHash, swap.BlockNumber, false)
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
 
 	// 更新 amt0
-	err = e.UpdateLiquidity(tx, swap.Tick)
+	err = db.UpdateLiquidity(tx, swap.Tick)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -155,7 +166,7 @@ func (e *DBClient) SwapAdd(tx *gorm.DB, swap *models.SwapInfo) error {
 	return nil
 }
 
-func (e *DBClient) SwapRemove(tx *gorm.DB, swap *models.SwapInfo) error {
+func (db *DBClient) SwapRemove(tx *gorm.DB, swap *models.SwapInfo) error {
 
 	swapl := &models.SwapLiquidity{}
 	err := tx.Where("tick0 = ? and tick1 = ?", swap.Tick0, swap.Tick1).First(swapl).Error
@@ -176,22 +187,22 @@ func (e *DBClient) SwapRemove(tx *gorm.DB, swap *models.SwapInfo) error {
 	swap.Amt0Out = (*models.Number)(amt0Out)
 	swap.Amt1Out = (*models.Number)(amt1Out)
 
-	err = e.TransferDrc20(tx, swap.Tick0, swapl.ReservesAddress, swap.HolderAddress, amt0Out, swap.TxHash, swap.BlockNumber, false)
+	err = db.TransferDrc20(tx, swap.Tick0, swapl.ReservesAddress, swap.HolderAddress, amt0Out, swap.TxHash, swap.BlockNumber, false)
 	if err != nil {
 		return err
 	}
 
-	err = e.TransferDrc20(tx, swap.Tick1, swapl.ReservesAddress, swap.HolderAddress, amt1Out, swap.TxHash, swap.BlockNumber, false)
+	err = db.TransferDrc20(tx, swap.Tick1, swapl.ReservesAddress, swap.HolderAddress, amt1Out, swap.TxHash, swap.BlockNumber, false)
 	if err != nil {
 		return err
 	}
 
-	err = e.BurnDrc20(tx, swapl.Tick, swap.HolderAddress, swap.Liquidity.Int(), swap.TxHash, swap.BlockNumber, false)
+	err = db.BurnDrc20(tx, swapl.Tick, swap.HolderAddress, swap.Liquidity.Int(), swap.TxHash, swap.BlockNumber, false)
 	if err != nil {
 		return err
 	}
 
-	err = e.UpdateLiquidity(tx, swapl.Tick)
+	err = db.UpdateLiquidity(tx, swapl.Tick)
 	if err != nil {
 		return err
 	}
@@ -199,7 +210,7 @@ func (e *DBClient) SwapRemove(tx *gorm.DB, swap *models.SwapInfo) error {
 	return nil
 }
 
-func (e *DBClient) SwapExec(tx *gorm.DB, swap *models.SwapInfo) error {
+func (db *DBClient) SwapExec(tx *gorm.DB, swap *models.SwapInfo) error {
 
 	tick0, tick1, _, _, _, _ := utils.SortTokens(swap.Tick0, swap.Tick1, nil, nil, nil, nil)
 
@@ -222,17 +233,17 @@ func (e *DBClient) SwapExec(tx *gorm.DB, swap *models.SwapInfo) error {
 
 	swap.Amt1Out = (*models.Number)(amtout)
 
-	err = e.TransferDrc20(tx, swap.Tick0, swap.HolderAddress, swapl.ReservesAddress, swap.Amt0.Int(), swap.TxHash, swap.BlockNumber, false)
+	err = db.TransferDrc20(tx, swap.Tick0, swap.HolderAddress, swapl.ReservesAddress, swap.Amt0.Int(), swap.TxHash, swap.BlockNumber, false)
 	if err != nil {
 		return err
 	}
 
-	err = e.TransferDrc20(tx, swap.Tick1, swapl.ReservesAddress, swap.HolderAddress, amtout, swap.TxHash, swap.BlockNumber, false)
+	err = db.TransferDrc20(tx, swap.Tick1, swapl.ReservesAddress, swap.HolderAddress, amtout, swap.TxHash, swap.BlockNumber, false)
 	if err != nil {
 		return err
 	}
 
-	err = e.UpdateLiquidity(tx, swapl.Tick)
+	err = db.UpdateLiquidity(tx, swapl.Tick)
 	if err != nil {
 		return err
 	}
@@ -240,7 +251,7 @@ func (e *DBClient) SwapExec(tx *gorm.DB, swap *models.SwapInfo) error {
 	return nil
 }
 
-func (e *DBClient) UpdateLiquidity(tx *gorm.DB, tick string) error {
+func (db *DBClient) UpdateLiquidity(tx *gorm.DB, tick string) error {
 
 	err := tx.Exec(`UPDATE swap_liquidity
 				SET amt0 = (
@@ -296,11 +307,64 @@ func (e *DBClient) UpdateLiquidity(tx *gorm.DB, tick string) error {
 	return nil
 }
 
-func (c *DBClient) FindSwapPriceAll() ([]*SwapPrice, int64, error) {
+func (db *DBClient) UpdateLiquidityFork(tx *gorm.DB) error {
+
+	err := tx.Exec(`UPDATE swap_liquidity
+				SET amt0 = (
+					SELECT b.amt_sum
+					FROM drc20_collect_address b
+					WHERE 
+						swap_liquidity.tick0 = b.tick AND 
+						swap_liquidity.reserves_address = b.holder_address
+				)
+				WHERE EXISTS (
+					SELECT 1
+					FROM drc20_collect_address b
+					WHERE 
+						swap_liquidity.tick0 = b.tick AND 
+						swap_liquidity.reserves_address = b.holder_address 
+				)`).Error
+	if err != nil {
+		return fmt.Errorf("UpdateLiquidity error: %s", err.Error())
+	}
+
+	err = tx.Exec(` UPDATE swap_liquidity
+				SET amt1 = (
+					SELECT b.amt_sum
+					FROM drc20_collect_address b
+					WHERE 
+						swap_liquidity.tick1 = b.tick AND 
+						swap_liquidity.reserves_address = b.holder_address
+				)
+				WHERE EXISTS (
+					SELECT 1
+					FROM drc20_collect_address b
+					WHERE 
+						swap_liquidity.tick1 = b.tick AND 
+						swap_liquidity.reserves_address = b.holder_address 
+				)`).Error
+	if err != nil {
+		return err
+	}
+
+	err = tx.Exec(`UPDATE swap_liquidity
+				SET liquidity_total = (
+					SELECT b.amt_sum
+					FROM drc20_collect b
+					WHERE swap_liquidity.tick = b.tick
+				)`).Error
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (db *DBClient) FindSwapPriceAll() ([]*SwapPrice, int64, error) {
 
 	liquidityAll := make([]*models.SwapLiquidity, 0)
 	total := int64(0)
-	err := c.DB.Where("liquidity_total != '0'").Find(&liquidityAll).Limit(-1).Offset(-1).Count(&total).Error
+	err := db.DB.Where("liquidity_total != '0'").Find(&liquidityAll).Limit(-1).Offset(-1).Count(&total).Error
 	if err != nil {
 		return nil, 0, err
 	}
@@ -321,7 +385,7 @@ func (c *DBClient) FindSwapPriceAll() ([]*SwapPrice, int64, error) {
 	}
 
 	liquiditys := make([]*SwapPrice, 0)
-	len := int64(0)
+	lenght := int64(0)
 	for k, v := range liquidityMap {
 
 		f := new(big.Float).Mul(v, big.NewFloat(1e18))
@@ -330,7 +394,7 @@ func (c *DBClient) FindSwapPriceAll() ([]*SwapPrice, int64, error) {
 			Tick:      k,
 			LastPrice: fi.String(),
 		})
-		len++
+		lenght++
 	}
 
 	liquidityMapNoDoge := make(map[string]*big.Float)
@@ -363,8 +427,8 @@ func (c *DBClient) FindSwapPriceAll() ([]*SwapPrice, int64, error) {
 			Tick:      k,
 			LastPrice: fi.String(),
 		})
-		len++
+		lenght++
 	}
 
-	return liquiditys, len, nil
+	return liquiditys, lenght, nil
 }

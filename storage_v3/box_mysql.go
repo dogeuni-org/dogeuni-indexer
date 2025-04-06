@@ -73,10 +73,10 @@ func (c *MysqlClient) FindBoxInfo(orderId, op, tick0, tick1, holder_address stri
 		if err != nil {
 			return nil, 0, err
 		}
-		ex.Max, _ = utils.ConvetStringToNumber(max)
-		ex.Amt0, _ = utils.ConvetStringToNumber(amt0)
-		ex.LiqAmt, _ = utils.ConvetStringToNumber(liqamt)
-		ex.Amt1, _ = utils.ConvetStringToNumber(amt1)
+		ex.Max, _ = utils.ConvertStringToNumber(max)
+		ex.Amt0, _ = utils.ConvertStringToNumber(amt0)
+		ex.LiqAmt, _ = utils.ConvertStringToNumber(liqamt)
+		ex.Amt1, _ = utils.ConvertStringToNumber(amt1)
 		exs = append(exs, ex)
 	}
 
@@ -141,12 +141,12 @@ func (c *MysqlClient) FindBoxCollect(tick0, tick1, holder_address string, limit,
 		if err != nil {
 			return nil, 0, err
 		}
-		ex.Max, _ = utils.ConvetStringToNumber(max)
-		ex.LiqAmt, _ = utils.ConvetStringToNumber(liqamt)
-		ex.Amt0, _ = utils.ConvetStringToNumber(amt0)
-		ex.Amt1, _ = utils.ConvetStringToNumber(amt1)
-		ex.Amt0Finish, _ = utils.ConvetStringToNumber(amt0_finish)
-		ex.LiqAmtFinish, _ = utils.ConvetStringToNumber(liqamt_finish)
+		ex.Max, _ = utils.ConvertStringToNumber(max)
+		ex.LiqAmt, _ = utils.ConvertStringToNumber(liqamt)
+		ex.Amt0, _ = utils.ConvertStringToNumber(amt0)
+		ex.Amt1, _ = utils.ConvertStringToNumber(amt1)
+		ex.Amt0Finish, _ = utils.ConvertStringToNumber(amt0_finish)
+		ex.LiqAmtFinish, _ = utils.ConvertStringToNumber(liqamt_finish)
 		exs = append(exs, ex)
 	}
 

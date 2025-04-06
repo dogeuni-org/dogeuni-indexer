@@ -13,7 +13,7 @@ import (
 	"math/big"
 )
 
-func (e Explorer) wdogeDecode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.WDogeInfo, error) {
+func (e *Explorer) wdogeDecode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.WDogeInfo, error) {
 
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Txid).First(&models.WDogeInfo{}).Error
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -98,7 +98,7 @@ func (e Explorer) wdogeDecode(tx *btcjson.TxRawResult, pushedData []byte, number
 	return wdoge, nil
 }
 
-func (e Explorer) wdogeDeposit(wdoge *models.WDogeInfo) error {
+func (e *Explorer) wdogeDeposit(wdoge *models.WDogeInfo) error {
 
 	tx := e.dbc.DB.Begin()
 
@@ -122,7 +122,7 @@ func (e Explorer) wdogeDeposit(wdoge *models.WDogeInfo) error {
 	return nil
 }
 
-func (e Explorer) wdogeWithdraw(wdoge *models.WDogeInfo) error {
+func (e *Explorer) wdogeWithdraw(wdoge *models.WDogeInfo) error {
 
 	tx := e.dbc.DB.Begin()
 	err := e.dbc.DogeWithdraw(tx, wdoge)
@@ -145,7 +145,7 @@ func (e Explorer) wdogeWithdraw(wdoge *models.WDogeInfo) error {
 	return nil
 }
 
-func (e Explorer) wdogeDepositSwap(dbtx *gorm.DB, wdoge *models.WDogeInfo) error {
+func (e *Explorer) wdogeDepositSwap(dbtx *gorm.DB, wdoge *models.WDogeInfo) error {
 
 	wdoge.OrderId = uuid.New().String()
 
@@ -162,7 +162,7 @@ func (e Explorer) wdogeDepositSwap(dbtx *gorm.DB, wdoge *models.WDogeInfo) error
 	return nil
 }
 
-func (e Explorer) wdogeWithdrawSwap(dbtx *gorm.DB, wdoge *models.WDogeInfo) error {
+func (e *Explorer) wdogeWithdrawSwap(dbtx *gorm.DB, wdoge *models.WDogeInfo) error {
 
 	err := e.dbc.DogeWithdraw(dbtx, wdoge)
 	if err != nil {

@@ -10,6 +10,11 @@ type SwapPrice struct {
 	LastPrice string `json:"last_price"`
 }
 
+type SwapV2Price struct {
+	TickId    string `json:"tick_id"`
+	LastPrice string `json:"last_price"`
+}
+
 type SwapInfoSummary struct {
 	Id          int64    `json:"id"`
 	Tick        string   `json:"tick"`

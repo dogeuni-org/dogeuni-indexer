@@ -4,7 +4,6 @@ import (
 	"dogeuni-indexer/models"
 	"dogeuni-indexer/storage"
 	"dogeuni-indexer/utils"
-	"dogeuni-indexer/verifys"
 	"github.com/dogecoinw/doged/rpcclient"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -16,16 +15,13 @@ type FileRouter struct {
 	dbc  *storage.DBClient
 	node *rpcclient.Client
 	ipfs *shell.Shell
-
-	verify *verifys.Verifys
 }
 
-func NewFileRouter(db *storage.DBClient, node *rpcclient.Client, ipfs *shell.Shell, verify *verifys.Verifys) *FileRouter {
+func NewFileRouter(db *storage.DBClient, node *rpcclient.Client, ipfs *shell.Shell) *FileRouter {
 	return &FileRouter{
-		dbc:    db,
-		node:   node,
-		ipfs:   ipfs,
-		verify: verify,
+		dbc:  db,
+		node: node,
+		ipfs: ipfs,
 	}
 }
 
@@ -35,6 +31,7 @@ func (r *FileRouter) Order(c *gin.Context) {
 		Op            string `json:"op"`
 		HolderAddress string `json:"holder_address"`
 		ToAddress     string `json:"to_address"`
+		TxHash        string `json:"tx_hash"`
 		BlockNumber   int64  `json:"block_number"`
 		Limit         int    `json:"limit"`
 		OffSet        int    `json:"offset"`
@@ -53,6 +50,7 @@ func (r *FileRouter) Order(c *gin.Context) {
 		Op:            params.Op,
 		HolderAddress: params.HolderAddress,
 		ToAddress:     params.ToAddress,
+		TxHash:        params.TxHash,
 		BlockNumber:   params.BlockNumber,
 	}
 

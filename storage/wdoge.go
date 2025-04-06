@@ -5,9 +5,9 @@ import (
 	"gorm.io/gorm"
 )
 
-func (c *DBClient) DogeDeposit(tx *gorm.DB, wdoge *models.WDogeInfo) error {
+func (db *DBClient) DogeDeposit(tx *gorm.DB, wdoge *models.WDogeInfo) error {
 
-	err := c.MintDrc20(tx, wdoge.Tick, wdoge.HolderAddress, wdoge.Amt.Int(), wdoge.TxHash, wdoge.BlockNumber, false)
+	err := db.MintDrc20(tx, wdoge.Tick, wdoge.HolderAddress, wdoge.Amt.Int(), wdoge.TxHash, wdoge.BlockNumber, false)
 	if err != nil {
 		return err
 	}
@@ -15,9 +15,9 @@ func (c *DBClient) DogeDeposit(tx *gorm.DB, wdoge *models.WDogeInfo) error {
 	return nil
 }
 
-func (c *DBClient) DogeWithdraw(tx *gorm.DB, wdoge *models.WDogeInfo) error {
+func (db *DBClient) DogeWithdraw(tx *gorm.DB, wdoge *models.WDogeInfo) error {
 
-	err := c.BurnDrc20(tx, wdoge.Tick, wdoge.HolderAddress, wdoge.Amt.Int(), wdoge.TxHash, wdoge.BlockNumber, false)
+	err := db.BurnDrc20(tx, wdoge.Tick, wdoge.HolderAddress, wdoge.Amt.Int(), wdoge.TxHash, wdoge.BlockNumber, false)
 	if err != nil {
 		return err
 	}

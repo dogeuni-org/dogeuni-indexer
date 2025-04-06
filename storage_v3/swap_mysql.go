@@ -30,8 +30,8 @@ func (c *MysqlClient) FindSwapInfoById(OrderId string) (*models.SwapInfo, error)
 			return nil, err
 		}
 
-		swap.Amt0, _ = utils.ConvetStringToNumber(amt0)
-		swap.Amt1, _ = utils.ConvetStringToNumber(amt1)
+		swap.Amt0, _ = utils.ConvertStringToNumber(amt0)
+		swap.Amt1, _ = utils.ConvertStringToNumber(amt1)
 
 		return swap, err
 	}
@@ -250,12 +250,12 @@ func (c *MysqlClient) FindSwapInfo(orderId, op, tick, tick0, tick1, holder_addre
 			return nil, 0, err
 		}
 
-		swap.Amt0, _ = utils.ConvetStr(amt0)
-		swap.Amt1, _ = utils.ConvetStr(amt1)
-		swap.Amt0Min, _ = utils.ConvetStr(amt0min)
-		swap.Amt1Min, _ = utils.ConvetStr(amt1min)
-		swap.Amt0Out, _ = utils.ConvetStr(amt0out)
-		swap.Amt1Out, _ = utils.ConvetStr(amt1out)
+		swap.Amt0, _ = utils.ConvertStr(amt0)
+		swap.Amt1, _ = utils.ConvertStr(amt1)
+		swap.Amt0Min, _ = utils.ConvertStr(amt0min)
+		swap.Amt1Min, _ = utils.ConvertStr(amt1min)
+		swap.Amt0Out, _ = utils.ConvertStr(amt0out)
+		swap.Amt1Out, _ = utils.ConvertStr(amt1out)
 
 		tm, err := time.Parse(time.RFC3339, swap.CreateDate)
 		if err != nil {
@@ -310,9 +310,9 @@ func (c *MysqlClient) FindSwapLiquidityAll() ([]*models.SwapLiquidity, int64, er
 		if err != nil {
 			return nil, 0, err
 		}
-		liquidity.Amt0, _ = utils.ConvetStringToNumber(amt0)
-		liquidity.Amt1, _ = utils.ConvetStringToNumber(amt1)
-		liquidity.LiquidityTotal, _ = utils.ConvetStringToNumber(liquidity_total)
+		liquidity.Amt0, _ = utils.ConvertStringToNumber(amt0)
+		liquidity.Amt1, _ = utils.ConvertStringToNumber(amt1)
+		liquidity.LiquidityTotal, _ = utils.ConvertStringToNumber(liquidity_total)
 		list = append(list, liquidity)
 	}
 
@@ -347,9 +347,9 @@ func (c *MysqlClient) FindSwapLiquidity(tick0 string, tick1 string) (*models.Swa
 		if err != nil {
 			return nil, err
 		}
-		liquidity.Amt0, _ = utils.ConvetStringToNumber(amt0)
-		liquidity.Amt1, _ = utils.ConvetStringToNumber(amt1)
-		liquidity.LiquidityTotal, _ = utils.ConvetStringToNumber(liquidity_total)
+		liquidity.Amt0, _ = utils.ConvertStringToNumber(amt0)
+		liquidity.Amt1, _ = utils.ConvertStringToNumber(amt1)
+		liquidity.LiquidityTotal, _ = utils.ConvertStringToNumber(liquidity_total)
 		return liquidity, nil
 	}
 	return nil, nil
@@ -371,9 +371,9 @@ func (c *MysqlClient) FindSwapLiquidityWeb(tick0 string, tick1 string) (*models.
 		if err != nil {
 			return nil, err
 		}
-		liquidity.Amt0, _ = utils.ConvetStringToNumber(amt0)
-		liquidity.Amt1, _ = utils.ConvetStringToNumber(amt1)
-		liquidity.LiquidityTotal, _ = utils.ConvetStringToNumber(liquidity_total)
+		liquidity.Amt0, _ = utils.ConvertStringToNumber(amt0)
+		liquidity.Amt1, _ = utils.ConvertStringToNumber(amt1)
+		liquidity.LiquidityTotal, _ = utils.ConvertStringToNumber(liquidity_total)
 		return liquidity, nil
 	}
 	return nil, nil
@@ -395,7 +395,7 @@ func (c *MysqlClient) FindSwapLiquidityLP(tick string) ([]*models.SwapLiquidityL
 		if err != nil {
 			return nil, err
 		}
-		liquidity.Liquidity, _ = utils.ConvetStr(amt_sum)
+		liquidity.Liquidity, _ = utils.ConvertStr(amt_sum)
 		liquiditys = append(liquiditys, liquidity)
 	}
 	return liquiditys, nil
@@ -436,7 +436,7 @@ func (c *MysqlClient) FindSwapLiquidityByHolder(holder_address string, tick0, ti
 			return nil, err
 		}
 
-		amt_sum_big, _ := utils.ConvetStringToNumber(amt_sum)
+		amt_sum_big, _ := utils.ConvertStringToNumber(amt_sum)
 		liquidity.Amt0 = (*models.Number)(new(big.Int).Div(new(big.Int).Mul(swapLiquidity.Amt0.Int(), amt_sum_big.Int()), swapLiquidity.LiquidityTotal.Int()))
 		liquidity.Amt1 = (*models.Number)(new(big.Int).Div(new(big.Int).Mul(swapLiquidity.Amt1.Int(), amt_sum_big.Int()), swapLiquidity.LiquidityTotal.Int()))
 		liquidity.Tick0 = tick0

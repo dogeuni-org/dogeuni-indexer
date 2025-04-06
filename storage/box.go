@@ -8,7 +8,7 @@ import (
 	"math/big"
 )
 
-func (c *DBClient) BoxDeploy(tx *gorm.DB, box *models.BoxInfo, reservesAddress string) error {
+func (db *DBClient) BoxDeploy(tx *gorm.DB, box *models.BoxInfo, reservesAddress string) error {
 
 	drc20c := &models.Drc20Collect{
 		Tick:          box.Tick0,
@@ -23,7 +23,7 @@ func (c *DBClient) BoxDeploy(tx *gorm.DB, box *models.BoxInfo, reservesAddress s
 		return fmt.Errorf("BoxDeploy err: %s order_id: %s", err.Error(), box.OrderId)
 	}
 
-	if err := c.MintDrc20(tx, box.Tick0, reservesAddress, box.Max.Int(), box.TxHash, box.BlockNumber, false); err != nil {
+	if err := db.MintDrc20(tx, box.Tick0, reservesAddress, box.Max.Int(), box.TxHash, box.BlockNumber, false); err != nil {
 		return fmt.Errorf("BoxDeploy MintDrc20 err: %s", err.Error())
 	}
 
@@ -58,7 +58,7 @@ func (c *DBClient) BoxDeploy(tx *gorm.DB, box *models.BoxInfo, reservesAddress s
 	return nil
 }
 
-func (c *DBClient) BoxMint(tx *gorm.DB, box *models.BoxInfo, reservesAddress string) error {
+func (db *DBClient) BoxMint(tx *gorm.DB, box *models.BoxInfo, reservesAddress string) error {
 
 	boxc := &models.BoxCollect{}
 	err := tx.Where("tick0 = ?", box.Tick0).First(boxc).Error
@@ -66,7 +66,7 @@ func (c *DBClient) BoxMint(tx *gorm.DB, box *models.BoxInfo, reservesAddress str
 		return fmt.Errorf("BoxMint FindBoxCollectByTick err: %s", err.Error())
 	}
 
-	err = c.TransferDrc20(tx, boxc.Tick1, box.HolderAddress, reservesAddress, box.Amt1.Int(), box.TxHash, box.BlockNumber, false)
+	err = db.TransferDrc20(tx, boxc.Tick1, box.HolderAddress, reservesAddress, box.Amt1.Int(), box.TxHash, box.BlockNumber, false)
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,7 @@ func (c *DBClient) BoxMint(tx *gorm.DB, box *models.BoxInfo, reservesAddress str
 						box_collect.is_del = 0 AND 
 						box_collect.reserves_address = ? AND 
 						box_collect.tick1 = ?
-				);`, reservesAddress, boxc.Tick1).Error
+				)`, reservesAddress, boxc.Tick1).Error
 
 	if err != nil {
 		return err
@@ -110,8 +110,10 @@ func (c *DBClient) BoxMint(tx *gorm.DB, box *models.BoxInfo, reservesAddress str
 		return fmt.Errorf("BoxMint FindBoxCollectByTick err: %s", err.Error())
 	}
 
-	if boxc1.LiqAmt.Int().Cmp(big.NewInt(0)) > 0 && boxc1.LiqAmtFinish.Cmp(boxc1.LiqAmt) >= 0 {
-		err := c.BoxFinish(tx, boxc1, box.BlockNumber)
+	boxc.LiqAmtFinish = (*models.Number)(big.NewInt(0).Add(boxc.LiqAmtFinish.Int(), box.Amt1.Int()))
+
+	if boxc1.LiqAmt.Int().Cmp(big.NewInt(0)) > 0 && boxc.LiqAmtFinish.Cmp(boxc1.LiqAmtFinish) >= 0 {
+		err := db.BoxFinish(tx, boxc, box.BlockNumber)
 		if err != nil {
 			return err
 		}
@@ -120,7 +122,7 @@ func (c *DBClient) BoxMint(tx *gorm.DB, box *models.BoxInfo, reservesAddress str
 	return nil
 }
 
-func (c *DBClient) BoxFinish(tx *gorm.DB, boxc *models.BoxCollect, height int64) error {
+func (db *DBClient) BoxFinish(tx *gorm.DB, boxc *models.BoxCollect, height int64) error {
 	swap := &models.SwapInfo{
 		Op:            "create",
 		Tick0:         boxc.Tick0,
@@ -137,7 +139,7 @@ func (c *DBClient) BoxFinish(tx *gorm.DB, boxc *models.BoxCollect, height int64)
 	swap.Amt0Out = swap.Amt0
 	swap.Amt1Out = swap.Amt1
 
-	err := c.SwapCreate(tx, swap)
+	err := db.SwapCreate(tx, swap)
 	if err != nil {
 		return fmt.Errorf("swapCreate SwapCreate error: %v", err)
 	}
@@ -155,13 +157,18 @@ func (c *DBClient) BoxFinish(tx *gorm.DB, boxc *models.BoxCollect, height int64)
 
 	for _, ba := range bas {
 		amt := big.NewInt(0).Div(big.NewInt(0).Mul(ba.Amt.Int(), boxc.Amt0.Int()), total)
-		err = c.TransferDrc20(tx, boxc.Tick0, boxc.ReservesAddress, ba.HolderAddress, amt, "box_finish", height, false)
+		err = db.TransferDrc20(tx, boxc.Tick0, boxc.ReservesAddress, ba.HolderAddress, amt, "box_finish", height, false)
 		if err != nil {
 			return err
 		}
 	}
 
-	err = tx.Model(&models.BoxCollect{}).Where("tick0 = ?", boxc.Tick0).Update("amt0_finish", boxc.Amt0).Error
+	err = tx.Model(&models.BoxCollect{}).Where("tick0 = ?", boxc.Tick0).Updates(
+		map[string]interface{}{
+			"amt0_finish":   boxc.Amt0,
+			"liqamt_finish": boxc.LiqAmtFinish,
+		}).Error
+
 	if err != nil {
 		return err
 	}
@@ -181,9 +188,9 @@ func (c *DBClient) BoxFinish(tx *gorm.DB, boxc *models.BoxCollect, height int64)
 	return nil
 }
 
-func (c *DBClient) BoxRefund(tx *gorm.DB, boxc *models.BoxCollect, height int64) error {
+func (db *DBClient) BoxRefund(tx *gorm.DB, boxc *models.BoxCollect, height int64) error {
 
-	err := c.BurnDrc20(tx, boxc.Tick0, boxc.ReservesAddress, boxc.Max.Int(), "box_refund", height, false)
+	err := db.BurnDrc20(tx, boxc.Tick0, boxc.ReservesAddress, boxc.Max.Int(), "box_refund", height, false)
 	if err != nil {
 		return err
 	}
@@ -225,7 +232,7 @@ func (c *DBClient) BoxRefund(tx *gorm.DB, boxc *models.BoxCollect, height int64)
 	}
 
 	for _, ba := range bas {
-		err = c.TransferDrc20(tx, boxc.Tick1, boxc.ReservesAddress, ba.HolderAddress, ba.Amt.Int(), "box_refund", height, false)
+		err = db.TransferDrc20(tx, boxc.Tick1, boxc.ReservesAddress, ba.HolderAddress, ba.Amt.Int(), "box_refund", height, false)
 		if err != nil {
 			return err
 		}

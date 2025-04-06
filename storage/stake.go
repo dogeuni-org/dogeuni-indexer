@@ -5,14 +5,14 @@ import (
 	"gorm.io/gorm"
 )
 
-func (e *DBClient) StakeStake(tx *gorm.DB, stake *models.StakeInfo, reservesAddress string) error {
+func (db *DBClient) StakeStake(tx *gorm.DB, stake *models.StakeInfo, reservesAddress string) error {
 
-	err := e.TransferDrc20(tx, stake.Tick, stake.HolderAddress, reservesAddress, stake.Amt.Int(), stake.TxHash, stake.BlockNumber, false)
+	err := db.TransferDrc20(tx, stake.Tick, stake.HolderAddress, reservesAddress, stake.Amt.Int(), stake.TxHash, stake.BlockNumber, false)
 	if err != nil {
 		return err
 	}
 
-	err = e.StakeStakeV1(tx, stake.Tick, stake.HolderAddress, stake.Amt.Int(), stake.TxHash, stake.BlockNumber, false)
+	err = db.StakeStakeV1(tx, stake.Tick, stake.HolderAddress, stake.Amt.Int(), stake.TxHash, stake.BlockNumber, false)
 	if err != nil {
 		return err
 	}
@@ -20,15 +20,15 @@ func (e *DBClient) StakeStake(tx *gorm.DB, stake *models.StakeInfo, reservesAddr
 	return nil
 }
 
-func (e *DBClient) StakeUnStake(tx *gorm.DB, stake *models.StakeInfo, reservesAddress string) error {
+func (db *DBClient) StakeUnStake(tx *gorm.DB, stake *models.StakeInfo, reservesAddress string) error {
 
-	err := e.TransferDrc20(tx, stake.Tick, reservesAddress, stake.HolderAddress, stake.Amt.Int(), stake.TxHash, stake.BlockNumber, false)
+	err := db.TransferDrc20(tx, stake.Tick, reservesAddress, stake.HolderAddress, stake.Amt.Int(), stake.TxHash, stake.BlockNumber, false)
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
 
-	err = e.StakeUnStakeV1(tx, stake.Tick, stake.HolderAddress, stake.Amt.Int(), stake.TxHash, stake.BlockNumber, false)
+	err = db.StakeUnStakeV1(tx, stake.Tick, stake.HolderAddress, stake.Amt.Int(), stake.TxHash, stake.BlockNumber, false)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -37,15 +37,15 @@ func (e *DBClient) StakeUnStake(tx *gorm.DB, stake *models.StakeInfo, reservesAd
 	return nil
 }
 
-func (e *DBClient) StakeGetReward(tx *gorm.DB, stake *models.StakeInfo) error {
+func (db *DBClient) StakeGetReward(tx *gorm.DB, stake *models.StakeInfo) error {
 
-	rewards, err := e.StakeGetRewardV1(tx, stake.HolderAddress, stake.Tick)
+	rewards, err := db.StakeGetRewardV1(tx, stake.HolderAddress, stake.Tick)
 	if err != nil {
 		return err
 	}
 
 	for _, reward := range rewards {
-		err = e.TransferDrc20(tx, reward.Tick, stakePoolAddress, stake.HolderAddress, reward.Reward, stake.TxHash, stake.BlockNumber, false)
+		err = db.TransferDrc20(tx, reward.Tick, stakePoolAddress, stake.HolderAddress, reward.Reward, stake.TxHash, stake.BlockNumber, false)
 		if err != nil {
 			return err
 		}
@@ -65,7 +65,7 @@ func (e *DBClient) StakeGetReward(tx *gorm.DB, stake *models.StakeInfo) error {
 		}
 	}
 
-	err = e.StakeRewardV1(tx, stake.Tick, stake.HolderAddress, stake.TxHash, stake.BlockNumber)
+	err = db.StakeRewardV1(tx, stake.Tick, stake.HolderAddress, stake.TxHash, stake.BlockNumber)
 	if err != nil {
 		return err
 	}

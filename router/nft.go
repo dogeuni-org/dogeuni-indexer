@@ -4,7 +4,6 @@ import (
 	"dogeuni-indexer/models"
 	"dogeuni-indexer/storage"
 	"dogeuni-indexer/utils"
-	"dogeuni-indexer/verifys"
 	"github.com/dogecoinw/doged/rpcclient"
 	"github.com/gin-gonic/gin"
 	"net/http"
@@ -13,15 +12,12 @@ import (
 type NftRouter struct {
 	dbc  *storage.DBClient
 	node *rpcclient.Client
-
-	verify *verifys.Verifys
 }
 
-func NewNftRouter(db *storage.DBClient, node *rpcclient.Client, verify *verifys.Verifys) *NftRouter {
+func NewNftRouter(db *storage.DBClient, node *rpcclient.Client) *NftRouter {
 	return &NftRouter{
-		dbc:    db,
-		node:   node,
-		verify: verify,
+		dbc:  db,
+		node: node,
 	}
 }
 
@@ -31,6 +27,7 @@ func (r *NftRouter) Order(c *gin.Context) {
 		Op            string `json:"op"`
 		HolderAddress string `json:"holder_address"`
 		ToAddress     string `json:"to_address"`
+		TxHash        string `json:"tx_hash"`
 		BlockNumber   int64  `json:"block_number"`
 		Limit         int    `json:"limit"`
 		OffSet        int    `json:"offset"`
@@ -49,6 +46,7 @@ func (r *NftRouter) Order(c *gin.Context) {
 		Op:            params.Op,
 		HolderAddress: params.HolderAddress,
 		ToAddress:     params.ToAddress,
+		TxHash:        params.TxHash,
 		BlockNumber:   params.BlockNumber,
 	}
 

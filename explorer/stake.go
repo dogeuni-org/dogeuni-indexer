@@ -10,11 +10,13 @@ import (
 	"github.com/dogecoinw/doged/btcutil"
 	"github.com/dogecoinw/doged/chaincfg"
 	"github.com/dogecoinw/doged/chaincfg/chainhash"
+	"github.com/dogecoinw/go-dogecoin/log"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"math/big"
 )
 
-func (e Explorer) stakeDecode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.StakeInfo, error) {
+func (e *Explorer) stakeDecode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.StakeInfo, error) {
 
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Txid).First(&models.StakeInfo{}).Error
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -69,7 +71,7 @@ func (e Explorer) stakeDecode(tx *btcjson.TxRawResult, pushedData []byte, number
 	return stake, nil
 }
 
-func (e Explorer) stakeStake(stake *models.StakeInfo) error {
+func (e *Explorer) stakeStake(stake *models.StakeInfo) error {
 	reservesAddress, _ := btcutil.NewAddressScriptHash([]byte(stake.Tick+"--STAKE"), &chaincfg.MainNetParams)
 
 	tx := e.dbc.DB.Begin()
@@ -94,7 +96,7 @@ func (e Explorer) stakeStake(stake *models.StakeInfo) error {
 	return nil
 }
 
-func (e Explorer) stakeUnStake(stake *models.StakeInfo) error {
+func (e *Explorer) stakeUnStake(stake *models.StakeInfo) error {
 
 	reservesAddress, _ := btcutil.NewAddressScriptHash([]byte(stake.Tick+"--STAKE"), &chaincfg.MainNetParams)
 
@@ -120,7 +122,7 @@ func (e Explorer) stakeUnStake(stake *models.StakeInfo) error {
 	return nil
 }
 
-func (e Explorer) stakeGetAllReward(stake *models.StakeInfo) error {
+func (e *Explorer) stakeGetAllReward(stake *models.StakeInfo) error {
 
 	tx := e.dbc.DB.Begin()
 	err := e.dbc.StakeGetReward(tx, stake)
@@ -140,5 +142,67 @@ func (e Explorer) stakeGetAllReward(stake *models.StakeInfo) error {
 		tx.Rollback()
 		return err
 	}
+	return nil
+}
+
+func (e *Explorer) stakeFork(tx *gorm.DB, height int64) error {
+	log.Info("fork", "stake", height)
+	// stake
+	var stakeReverts []*models.StakeRevert
+	err := tx.Model(&models.StakeRevert{}).
+		Where("block_number > ?", height).
+		Order("id desc").
+		Find(&stakeReverts).Error
+
+	if err != nil {
+		return fmt.Errorf("FindStakeRevert error: %v", err)
+	}
+
+	for _, revert := range stakeReverts {
+		if revert.FromAddress == "" && revert.ToAddress != "" {
+			err = e.dbc.StakeUnStakeV1(tx, revert.Tick, revert.ToAddress, revert.Amt.Int(), "", 0, true)
+			if err != nil {
+				return fmt.Errorf("stakev1Fork UnStakeV1 error: %v", err)
+			}
+		}
+
+		if revert.FromAddress != "" && revert.ToAddress == "" {
+			err = e.dbc.StakeStakeV1(tx, revert.Tick, revert.FromAddress, revert.Amt.Int(), "", 0, true)
+			if err != nil {
+				return fmt.Errorf("stakev1Fork StakeV1 error: %v", err)
+			}
+		}
+	}
+
+	stakeRewardReverts := []*models.StakeRewardRevert{}
+	err = tx.Model(&models.StakeRewardRevert{}).
+		Where("block_number > ?", height).
+		Order("id desc").
+		Find(&stakeRewardReverts).Error
+
+	if err != nil {
+		return fmt.Errorf("FindStakeRewardRevert error: %v", err)
+	}
+
+	for _, revert := range stakeRewardReverts {
+
+		stakeAddressCollect := &models.StakeCollectAddress{}
+		err = tx.Where("tick = ? AND holder_address = ?", revert.Tick, revert.ToAddress).
+			First(stakeAddressCollect).Error
+
+		if err != nil {
+			return fmt.Errorf("FindStakeCollectAddress error: %v", err)
+		}
+
+		reward := big.NewInt(0).Sub(stakeAddressCollect.Reward.Int(), revert.Amt.Int())
+
+		err = tx.Model(&models.StakeCollectAddress{}).
+			Where("tick = ? AND holder_address = ?", revert.Tick, revert.ToAddress).
+			Update("received_reward", reward.String()).Error
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }

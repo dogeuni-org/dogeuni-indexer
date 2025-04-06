@@ -6,7 +6,6 @@ import (
 	"dogeuni-indexer/storage"
 	"dogeuni-indexer/storage_v3"
 	"dogeuni-indexer/utils"
-	"dogeuni-indexer/verifys"
 	"encoding/hex"
 	"fmt"
 	"github.com/dogecoinw/doged/rpcclient"
@@ -23,18 +22,15 @@ type Router struct {
 	node  *rpcclient.Client
 	level *storage.LevelDB
 	ipfs  *shell.Shell
-
-	verify *verifys.Verifys
 }
 
 func NewRouter(mysql *storage_v3.MysqlClient, dbc *storage.DBClient, level *storage.LevelDB, node *rpcclient.Client, ipfs *shell.Shell) *Router {
 	return &Router{
-		mysql:  mysql,
-		node:   node,
-		ipfs:   ipfs,
-		level:  level,
-		dbc:    dbc,
-		verify: verifys.NewVerifys(dbc),
+		mysql: mysql,
+		node:  node,
+		ipfs:  ipfs,
+		level: level,
+		dbc:   dbc,
 	}
 }
 

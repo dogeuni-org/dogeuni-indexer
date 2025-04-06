@@ -8,11 +8,12 @@ import (
 	"fmt"
 	"github.com/dogecoinw/doged/btcjson"
 	"github.com/dogecoinw/doged/chaincfg/chainhash"
+	"github.com/dogecoinw/go-dogecoin/log"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
-func (e Explorer) crossDecode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.CrossInfo, error) {
+func (e *Explorer) crossDecode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.CrossInfo, error) {
 
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Txid).First(&models.CrossInfo{}).Error
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -75,7 +76,7 @@ func (e Explorer) crossDecode(tx *btcjson.TxRawResult, pushedData []byte, number
 	return cross, nil
 }
 
-func (e Explorer) crossDeploy(cross *models.CrossInfo) error {
+func (e *Explorer) crossDeploy(cross *models.CrossInfo) error {
 
 	tx := e.dbc.DB.Begin()
 	err := e.dbc.CrossDeploy(tx, cross)
@@ -84,7 +85,6 @@ func (e Explorer) crossDeploy(cross *models.CrossInfo) error {
 		return err
 	}
 
-	// 更新 status
 	err = tx.Model(&models.CrossInfo{}).Where("tx_hash = ?", cross.TxHash).Update("order_status", 0).Error
 	if err != nil {
 		tx.Rollback()
@@ -99,7 +99,7 @@ func (e Explorer) crossDeploy(cross *models.CrossInfo) error {
 	return nil
 }
 
-func (e Explorer) crossMint(cross *models.CrossInfo) error {
+func (e *Explorer) crossMint(cross *models.CrossInfo) error {
 
 	tx := e.dbc.DB.Begin()
 	err := e.dbc.CrossMint(tx, cross)
@@ -108,7 +108,6 @@ func (e Explorer) crossMint(cross *models.CrossInfo) error {
 		return err
 	}
 
-	// 更新 status
 	err = tx.Model(&models.CrossInfo{}).Where("tx_hash = ?", cross.TxHash).Update("order_status", 0).Error
 	if err != nil {
 		tx.Rollback()
@@ -123,7 +122,7 @@ func (e Explorer) crossMint(cross *models.CrossInfo) error {
 	return nil
 }
 
-func (e Explorer) crossBurn(cross *models.CrossInfo) error {
+func (e *Explorer) crossBurn(cross *models.CrossInfo) error {
 
 	tx := e.dbc.DB.Begin()
 	err := e.dbc.CrossBurn(tx, cross)
@@ -132,7 +131,6 @@ func (e Explorer) crossBurn(cross *models.CrossInfo) error {
 		return err
 	}
 
-	// 更新 status
 	err = tx.Model(&models.CrossInfo{}).Where("tx_hash = ?", cross.TxHash).Update("order_status", 0).Error
 	if err != nil {
 		tx.Rollback()
@@ -144,5 +142,35 @@ func (e Explorer) crossBurn(cross *models.CrossInfo) error {
 		tx.Rollback()
 		return err
 	}
+	return nil
+}
+
+func (e *Explorer) crossFork(tx *gorm.DB, height int64) error {
+	log.Info("fork", "cross", height)
+	//cross
+	var crossReverts []*models.CrossRevert
+	err := tx.Model(&models.CrossRevert{}).
+		Where("block_number > ?", height).
+		Order("id desc").
+		Find(&crossReverts).Error
+	if err != nil {
+		return fmt.Errorf("FindCrossRevert error: %v", err)
+	}
+
+	for _, revert := range crossReverts {
+		if revert.Op == "deploy" {
+
+			err = tx.Where("tick = ?", revert.Tick).Delete(&models.CrossCollect{}).Error
+			if err != nil {
+				return fmt.Errorf("CrossCollect error: %v", err)
+			}
+
+			err = tx.Where("tick = ?", revert.Tick).Delete(&models.Drc20Collect{}).Error
+			if err != nil {
+				return fmt.Errorf("Drc20Collect error: %v", err)
+			}
+		}
+	}
+
 	return nil
 }

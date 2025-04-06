@@ -34,7 +34,7 @@ func (Drc20Info) TableName() string {
 
 type Drc20Collect struct {
 	Tick          string    `json:"tick"`
-	AmtSum        *Number   `json:"amt_sum"`
+	AmtSum        *Number   `gorm:"column:amt_sum" json:"amt"`
 	Max           *Number   `gorm:"column:max_" json:"max"`
 	RealSum       *Number   `json:"real_sum"`
 	Lim           *Number   `gorm:"column:lim_" json:"lim"`
@@ -64,13 +64,14 @@ func (Drc20Collect) TableName() string {
 
 type Drc20CollectAddress struct {
 	Tick          string    `json:"tick"`
-	AmtSum        *Number   `json:"amt_sum"`
+	AmtSum        *Number   `gorm:"column:amt_sum" json:"amt"`
 	LockAmt       *Number   `json:"lock_amt"`
-	Max           *Number   `gorm:"column:max_" json:"max"`
+	Max           *Number   `gorm:"column:max_; ->" json:"max"`
 	Lim           *Number   `gorm:"column:lim_" json:"lim"`
 	Dec           uint      `gorm:"column:dec_" json:"dec"`
 	Burn          string    `gorm:"column:burn_" json:"burn"`
 	Func          string    `gorm:"column:func_" json:"func"`
+	Logo          string    `gorm:"column:logo; ->" json:"logo"`
 	HolderAddress string    `json:"holder_address"`
 	Transactions  uint64    `json:"transactions"`
 	UpdateDate    LocalTime `json:"update_date"`
@@ -82,7 +83,7 @@ func (Drc20CollectAddress) TableName() string {
 }
 
 type Drc20Revert struct {
-	ID          uint      `gorm:"primarykey"`
+	ID          uint      `gorm:"primarykey" json:"id"`
 	FromAddress string    `json:"from_address"`
 	ToAddress   string    `json:"to_address"`
 	Tick        string    `json:"tick"`

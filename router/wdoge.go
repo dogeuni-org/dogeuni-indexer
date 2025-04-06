@@ -4,7 +4,6 @@ import (
 	"dogeuni-indexer/models"
 	"dogeuni-indexer/storage"
 	"dogeuni-indexer/utils"
-	"dogeuni-indexer/verifys"
 	"github.com/dogecoinw/doged/rpcclient"
 	"github.com/gin-gonic/gin"
 	"net/http"
@@ -13,15 +12,12 @@ import (
 type WdogeRouter struct {
 	dbc  *storage.DBClient
 	node *rpcclient.Client
-
-	verify *verifys.Verifys
 }
 
-func NewWdogeRouter(db *storage.DBClient, node *rpcclient.Client, verify *verifys.Verifys) *WdogeRouter {
+func NewWdogeRouter(db *storage.DBClient, node *rpcclient.Client) *WdogeRouter {
 	return &WdogeRouter{
-		dbc:    db,
-		node:   node,
-		verify: verify,
+		dbc:  db,
+		node: node,
 	}
 }
 
@@ -30,6 +26,7 @@ func (r *WdogeRouter) Order(c *gin.Context) {
 		OrderId       string `json:"order_id"`
 		Op            string `json:"op"`
 		HolderAddress string `json:"holder_address"`
+		TxHash        string `json:"tx_hash"`
 		BlockNumber   int64  `json:"block_number"`
 		Limit         int    `json:"limit"`
 		OffSet        int    `json:"offset"`
@@ -47,6 +44,7 @@ func (r *WdogeRouter) Order(c *gin.Context) {
 		OrderId:       params.OrderId,
 		Op:            params.Op,
 		HolderAddress: params.HolderAddress,
+		TxHash:        params.TxHash,
 		BlockNumber:   params.BlockNumber,
 	}
 

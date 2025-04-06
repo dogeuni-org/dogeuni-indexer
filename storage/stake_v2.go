@@ -7,9 +7,9 @@ import (
 	"math/big"
 )
 
-func (e *DBClient) StakeV2Deploy(tx *gorm.DB, stake *models.StakeV2Info, reservesAddress string) error {
+func (db *DBClient) StakeV2Create(tx *gorm.DB, stake *models.StakeV2Info, reservesAddress string) error {
 
-	err := e.TransferDrc20(tx, stake.Tick1, stake.HolderAddress, reservesAddress, stake.Reward.Int(), stake.TxHash, stake.BlockNumber, false)
+	err := db.TransferDrc20(tx, stake.Tick1, stake.HolderAddress, reservesAddress, stake.Reward.Int(), stake.TxHash, stake.BlockNumber, false)
 	if err != nil {
 		return err
 	}
@@ -20,8 +20,8 @@ func (e *DBClient) StakeV2Deploy(tx *gorm.DB, stake *models.StakeV2Info, reserve
 		Tick1:           stake.Tick1,
 		Reward:          stake.Reward,
 		EachReward:      stake.EachReward,
-		LastRewardBlock: stake.BlockNumber,
 		ReservesAddress: reservesAddress,
+		HolderAddress:   stake.HolderAddress,
 	}
 
 	err = tx.Create(&stakec).Error
@@ -30,7 +30,7 @@ func (e *DBClient) StakeV2Deploy(tx *gorm.DB, stake *models.StakeV2Info, reserve
 	}
 
 	revert := &models.StakeV2Revert{
-		Op:          "deploy",
+		Op:          "create",
 		StakeId:     stake.StakeId,
 		Tick:        stake.Tick0,
 		BlockNumber: stake.BlockNumber,
@@ -44,7 +44,7 @@ func (e *DBClient) StakeV2Deploy(tx *gorm.DB, stake *models.StakeV2Info, reserve
 	return nil
 }
 
-func (e *DBClient) StakeV2Stake(tx *gorm.DB, stake *models.StakeV2Info) error {
+func (db *DBClient) StakeV2Stake(tx *gorm.DB, stake *models.StakeV2Info) error {
 
 	stakec := &models.StakeV2Collect{}
 	err := tx.Where("stake_id = ?", stake.StakeId).First(stakec).Error
@@ -52,7 +52,20 @@ func (e *DBClient) StakeV2Stake(tx *gorm.DB, stake *models.StakeV2Info) error {
 		return err
 	}
 
-	stakec, err = e.StakeV2UpdatePool(tx, stakec, stake.BlockNumber)
+	if stakec.LastRewardBlock == 0 {
+		lastBlock := big.NewInt(0).Add(big.NewInt(0).Div(stake.Reward.Int(), stake.EachReward.Int()), big.NewInt(stake.BlockNumber))
+		stakec.LastRewardBlock = stake.BlockNumber
+		stakec.LastBlock = lastBlock.Int64()
+		err = tx.Model(stakec).Updates(map[string]interface{}{
+			"last_reward_block": stakec.LastRewardBlock,
+			"last_block":        stakec.LastBlock,
+		}).Error
+		if err != nil {
+			return err
+		}
+	}
+
+	stakec, err = db.StakeV2UpdatePool(tx, stakec, stake.BlockNumber)
 	if err != nil {
 		return err
 	}
@@ -63,10 +76,11 @@ func (e *DBClient) StakeV2Stake(tx *gorm.DB, stake *models.StakeV2Info) error {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			stakea = &models.StakeV2CollectAddress{
 				StakeId:       stake.StakeId,
-				Tick:          stakec.Tick1,
+				Tick:          stakec.Tick0,
 				Amt:           models.NewNumber(0),
 				RewardDebt:    models.NewNumber(0),
 				PendingReward: models.NewNumber(0),
+				LastBlock:     stake.BlockNumber + stakec.LastBlock,
 				HolderAddress: stake.HolderAddress,
 			}
 			err = tx.Create(stakea).Error
@@ -91,7 +105,7 @@ func (e *DBClient) StakeV2Stake(tx *gorm.DB, stake *models.StakeV2Info) error {
 		}
 	}
 
-	err = e.TransferDrc20(tx, stakec.Tick1, stake.HolderAddress, stakec.ReservesAddress, stake.Amt.Int(), stake.TxHash, stake.BlockNumber, false)
+	err = db.TransferDrc20(tx, stakec.Tick0, stake.HolderAddress, stakec.ReservesAddress, stake.Amt.Int(), stake.TxHash, stake.BlockNumber, false)
 	if err != nil {
 		return err
 	}
@@ -126,6 +140,7 @@ func (e *DBClient) StakeV2Stake(tx *gorm.DB, stake *models.StakeV2Info) error {
 		"amt":            stakea.Amt,
 		"reward_debt":    stakea.RewardDebt,
 		"pending_reward": stakea.PendingReward,
+		"lock_block":     stake.BlockNumber + stakec.LastBlock,
 	}).Error
 	if err != nil {
 		return err
@@ -140,7 +155,7 @@ func (e *DBClient) StakeV2Stake(tx *gorm.DB, stake *models.StakeV2Info) error {
 	return nil
 }
 
-func (e *DBClient) StakeV2UnStake(tx *gorm.DB, stake *models.StakeV2Info) error {
+func (db *DBClient) StakeV2UnStake(tx *gorm.DB, stake *models.StakeV2Info) error {
 
 	stakec := &models.StakeV2Collect{}
 	err := tx.Where("stake_id = ?", stake.StakeId).First(stakec).Error
@@ -148,7 +163,7 @@ func (e *DBClient) StakeV2UnStake(tx *gorm.DB, stake *models.StakeV2Info) error 
 		return err
 	}
 
-	stakec, err = e.StakeV2UpdatePool(tx, stakec, stake.BlockNumber)
+	stakec, err = db.StakeV2UpdatePool(tx, stakec, stake.BlockNumber)
 	if err != nil {
 		return err
 	}
@@ -162,7 +177,7 @@ func (e *DBClient) StakeV2UnStake(tx *gorm.DB, stake *models.StakeV2Info) error 
 	revert := &models.StakeV2Revert{
 		Op:            "unstake",
 		StakeId:       stake.StakeId,
-		Tick:          stake.Tick1,
+		Tick:          stake.Tick0,
 		Amt:           stakea.Amt,
 		RewardDebt:    stakea.RewardDebt,
 		PendingReward: stakea.PendingReward,
@@ -181,8 +196,8 @@ func (e *DBClient) StakeV2UnStake(tx *gorm.DB, stake *models.StakeV2Info) error 
 		stakea.PendingReward = (*models.Number)(big.NewInt(0).Add(stakea.PendingReward.Int(), pending))
 	}
 
-	stakea.RewardDebt = (*models.Number)(big.NewInt(0).Div(big.NewInt(0).Mul(stakea.Amt.Int(), stakec.AccRewardPerShare.Int()), big.NewInt(1e8)))
 	stakea.Amt = (*models.Number)(big.NewInt(0).Sub(stakea.Amt.Int(), stake.Amt.Int()))
+	stakea.RewardDebt = (*models.Number)(big.NewInt(0).Div(big.NewInt(0).Mul(stakea.Amt.Int(), stakec.AccRewardPerShare.Int()), big.NewInt(1e8)))
 	err = tx.Model(stakea).Updates(map[string]interface{}{
 		"amt":            stakea.Amt,
 		"reward_debt":    stakea.RewardDebt,
@@ -198,7 +213,7 @@ func (e *DBClient) StakeV2UnStake(tx *gorm.DB, stake *models.StakeV2Info) error 
 		return err
 	}
 
-	err = e.TransferDrc20(tx, stakea.Tick, stakec.ReservesAddress, stake.HolderAddress, stakea.Amt.Int(), stake.TxHash, stake.BlockNumber, false)
+	err = db.TransferDrc20(tx, stakea.Tick, stakec.ReservesAddress, stake.HolderAddress, stake.Amt.Int(), stake.TxHash, stake.BlockNumber, false)
 	if err != nil {
 		return err
 	}
@@ -206,7 +221,7 @@ func (e *DBClient) StakeV2UnStake(tx *gorm.DB, stake *models.StakeV2Info) error 
 	return nil
 }
 
-func (e *DBClient) StakeV2GetReward(tx *gorm.DB, stake *models.StakeV2Info) error {
+func (db *DBClient) StakeV2GetReward(tx *gorm.DB, stake *models.StakeV2Info) error {
 
 	stakec := &models.StakeV2Collect{}
 	err := tx.Where("stake_id = ?", stake.StakeId).First(stakec).Error
@@ -214,7 +229,7 @@ func (e *DBClient) StakeV2GetReward(tx *gorm.DB, stake *models.StakeV2Info) erro
 		return err
 	}
 
-	stakec, err = e.StakeV2UpdatePool(tx, stakec, stake.BlockNumber)
+	stakec, err = db.StakeV2UpdatePool(tx, stakec, stake.BlockNumber)
 	if err != nil {
 		return err
 	}
@@ -260,7 +275,7 @@ func (e *DBClient) StakeV2GetReward(tx *gorm.DB, stake *models.StakeV2Info) erro
 		return err
 	}
 
-	err = e.TransferDrc20(tx, stakec.Tick0, stakec.ReservesAddress, stake.HolderAddress, rewardsToPay, stake.TxHash, stake.BlockNumber, false)
+	err = db.TransferDrc20(tx, stakec.Tick1, stakec.ReservesAddress, stake.HolderAddress, rewardsToPay, stake.TxHash, stake.BlockNumber, false)
 	if err != nil {
 		return err
 	}
@@ -268,9 +283,9 @@ func (e *DBClient) StakeV2GetReward(tx *gorm.DB, stake *models.StakeV2Info) erro
 	return nil
 }
 
-func (e *DBClient) StakeV2UpdatePool(tx *gorm.DB, stakec *models.StakeV2Collect, height int64) (*models.StakeV2Collect, error) {
+func (db *DBClient) StakeV2UpdatePool(tx *gorm.DB, stakec *models.StakeV2Collect, height int64) (*models.StakeV2Collect, error) {
 
-	if stakec.LastRewardBlock >= height {
+	if stakec.LastRewardBlock >= height || stakec.LastBlock < height {
 		return stakec, nil
 	}
 

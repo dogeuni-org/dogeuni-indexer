@@ -4,7 +4,6 @@ import (
 	"dogeuni-indexer/models"
 	"dogeuni-indexer/storage"
 	"dogeuni-indexer/utils"
-	"dogeuni-indexer/verifys"
 	"github.com/dogecoinw/doged/rpcclient"
 	"github.com/gin-gonic/gin"
 	"net/http"
@@ -14,15 +13,12 @@ import (
 type ExchangeRouter struct {
 	dbc  *storage.DBClient
 	node *rpcclient.Client
-
-	verify *verifys.Verifys
 }
 
-func NewExchangeRouter(db *storage.DBClient, node *rpcclient.Client, verify *verifys.Verifys) *ExchangeRouter {
+func NewExchangeRouter(db *storage.DBClient, node *rpcclient.Client) *ExchangeRouter {
 	return &ExchangeRouter{
-		dbc:    db,
-		node:   node,
-		verify: verify,
+		dbc:  db,
+		node: node,
 	}
 }
 

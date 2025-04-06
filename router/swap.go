@@ -4,7 +4,6 @@ import (
 	"dogeuni-indexer/models"
 	"dogeuni-indexer/storage"
 	"dogeuni-indexer/utils"
-	"dogeuni-indexer/verifys"
 	"github.com/dogecoinw/doged/rpcclient"
 	"github.com/gin-gonic/gin"
 	"math/big"
@@ -16,15 +15,12 @@ import (
 type SwapRouter struct {
 	dbc  *storage.DBClient
 	node *rpcclient.Client
-
-	verify *verifys.Verifys
 }
 
-func NewSwapRouter(db *storage.DBClient, node *rpcclient.Client, verify *verifys.Verifys) *SwapRouter {
+func NewSwapRouter(db *storage.DBClient, node *rpcclient.Client) *SwapRouter {
 	return &SwapRouter{
-		dbc:    db,
-		node:   node,
-		verify: verify,
+		dbc:  db,
+		node: node,
 	}
 }
 
@@ -35,6 +31,7 @@ func (r *SwapRouter) Order(c *gin.Context) {
 		Tick          string `json:"tick"`
 		Tick0         string `json:"tick0"`
 		Tick1         string `json:"tick1"`
+		TxHash        string `json:"tx_hash"`
 		HolderAddress string `json:"holder_address"`
 		BlockNumber   int64  `json:"block_number"`
 		Limit         int    `json:"limit"`
@@ -56,15 +53,31 @@ func (r *SwapRouter) Order(c *gin.Context) {
 		OrderId:       params.OrderId,
 		Op:            params.Op,
 		Tick:          params.Tick,
-		Tick0:         params.Tick0,
-		Tick1:         params.Tick1,
+		TxHash:        params.TxHash,
 		HolderAddress: params.HolderAddress,
 		BlockNumber:   params.BlockNumber,
 	}
 
 	infos := make([]*models.SwapInfo, 0)
 	total := int64(0)
-	err := r.dbc.DB.Where(filter).Limit(params.Limit).Offset(params.OffSet).Find(&infos).Limit(-1).Offset(-1).Count(&total).Error
+	subQuery := r.dbc.DB.Model(&models.SwapInfo{})
+
+	if params.Tick0 != "" && params.Tick1 != "" {
+		subQuery.Where("(tick0 = ? and tick1 = ?) or (tick1 = ? and tick0 = ?)", params.Tick0, params.Tick1, params.Tick0, params.Tick1)
+	} else {
+		filter = &models.SwapInfo{
+			OrderId:       params.OrderId,
+			Op:            params.Op,
+			Tick:          params.Tick,
+			Tick0:         params.Tick0,
+			Tick1:         params.Tick1,
+			TxHash:        params.TxHash,
+			HolderAddress: params.HolderAddress,
+			BlockNumber:   params.BlockNumber,
+		}
+	}
+
+	err := subQuery.Where(filter).Count(&total).Order("update_date desc").Limit(params.Limit).Offset(params.OffSet).Find(&infos).Error
 	if err != nil {
 		result := &utils.HttpResult{}
 		result.Code = 500
@@ -150,18 +163,17 @@ func (r *SwapRouter) SwapLiquidityHolder(c *gin.Context) {
 	params.Tick0, params.Tick1, _, _, _, _ = utils.SortTokens(params.Tick0, params.Tick1, nil, nil, nil, nil)
 
 	type QueryResult struct {
-		Liquidity      *models.Number `gorm:"column:amt_sum"`
-		LiquidityTotal *models.Number `gorm:"column:liquidity_total"`
-		Reserve0       *models.Number `gorm:"column:amt0"`
-		Reserve1       *models.Number `gorm:"column:amt1"`
-		Price          *big.Float     `gorm:"-" json:"price"`
-		Tick0          string         `json:"tick0"`
-		Tick1          string         `json:"tick1"`
-		Tick           string         `json:"tick"`
+		Liquidity      *models.Number `gorm:"column:amt_sum" json:"liquidity"`
+		LiquidityTotal *models.Number `gorm:"column:liquidity_total" json:"liquidity_total"`
+		Reserve0       *models.Number `gorm:"column:amt0" json:"reserve0"`
+		Reserve1       *models.Number `gorm:"column:amt1" json:"reserve1"`
+		Price          *big.Float     `gorm:"-" json:"price" `
+		Tick0          string         `gorm:"column:tick0" json:"tick0"`
+		Tick1          string         `gorm:"column:tick1" json:"tick1" `
+		Tick           string         `gorm:"column:tick" json:"tick"`
 	}
 
 	var results []QueryResult
-	var dbModels []*QueryResult
 	var total int64
 
 	tick := params.Tick0 + "-SWAP-" + params.Tick1
@@ -177,7 +189,7 @@ func (r *SwapRouter) SwapLiquidityHolder(c *gin.Context) {
 		subQuery = subQuery.Where("dca.tick = ?", tick)
 	}
 
-	err := subQuery.Where("length(dca.tick) > ? AND dca.amt_sum != ? AND dca.tick != ?", 9, "0", "WDOGE(WRAPPED-DOGE)").
+	err := subQuery.Where("dca.amt_sum != '0' AND dca.tick != 'WDOGE(WRAPPED-DOGE)' AND sl.liquidity_total != '0'").
 		Count(&total).Limit(params.Limit).Offset(params.OffSet).Scan(&results).Error
 
 	if err != nil {
@@ -188,7 +200,9 @@ func (r *SwapRouter) SwapLiquidityHolder(c *gin.Context) {
 		return
 	}
 
+	var dbModels []*QueryResult
 	for _, res := range results {
+		println(res.Reserve0.String(), res.Reserve1.String(), res.Liquidity.String(), res.LiquidityTotal.String(), res.Tick)
 		dbModels = append(dbModels, &QueryResult{
 			Tick:           res.Tick0 + "-SWAP-" + res.Tick1,
 			Tick0:          res.Tick0,
@@ -199,7 +213,6 @@ func (r *SwapRouter) SwapLiquidityHolder(c *gin.Context) {
 			Reserve0:       (*models.Number)(new(big.Int).Div(new(big.Int).Mul(res.Reserve0.Int(), res.Liquidity.Int()), res.LiquidityTotal.Int())),
 			Reserve1:       (*models.Number)(new(big.Int).Div(new(big.Int).Mul(res.Reserve1.Int(), res.Liquidity.Int()), res.LiquidityTotal.Int())),
 		})
-
 	}
 
 	result := &utils.HttpResult{}
@@ -492,7 +505,7 @@ func (r *SwapRouter) SwapSummary(c *gin.Context) {
         d20i.logo,
         d20i.is_check`, startDate.Format(layout)).
 		Joins("LEFT JOIN (?) e ON e.tick = d20i.tick", subQuery).
-		Where("LENGTH(d20i.tick) < 9").
+		//Where("LENGTH(d20i.tick) < 9").
 		Order("base_volume DESC, holders DESC")
 
 	// Apply pagination

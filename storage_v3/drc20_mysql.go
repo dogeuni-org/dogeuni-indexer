@@ -108,9 +108,9 @@ func (c *MysqlClient) FindSwapDrc20InfoByTick(tx *sql.Tx, tick string) (*big.Int
 			return nil, nil, nil, err
 		}
 
-		sum_big, _ := utils.ConvetStr(sum)
-		max_big, _ := utils.ConvetStr(max)
-		lim_big, _ := utils.ConvetStr(lim)
+		sum_big, _ := utils.ConvertStr(sum)
+		max_big, _ := utils.ConvertStr(max)
+		lim_big, _ := utils.ConvertStr(lim)
 		return sum_big, max_big, lim_big, nil
 	}
 
@@ -295,7 +295,7 @@ func (c *MysqlClient) FindDrc20() ([]*models.Drc20CollectAll, int64, error) {
 		}
 		result.MintAmt = amt_big
 
-		Lim, err := utils.ConvetStr(lim)
+		Lim, err := utils.ConvertStr(lim)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -342,7 +342,7 @@ func (c *MysqlClient) FindDrc20All() ([]*Drc20CollectAll, int64, error) {
 		}
 		result.MintAmt = amt_big
 
-		Lim, err := utils.ConvetStr(lim)
+		Lim, err := utils.ConvertStr(lim)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -482,7 +482,7 @@ func (c *MysqlClient) FindDrc20HoldersByTick(tick string, limit, offset int64) (
 			return nil, 0, err
 		}
 
-		Amt, err := utils.ConvetStr(amt)
+		Amt, err := utils.ConvertStr(amt)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -683,17 +683,17 @@ func (c *MysqlClient) FindOrders(receiveAddress, op, tick string, limit, offset 
 			return nil, 0, err
 		}
 
-		card.Max, err = utils.ConvetStringToNumber(*max)
+		card.Max, err = utils.ConvertStringToNumber(*max)
 		if err != nil {
 			return nil, 0, err
 		}
 
-		card.Amt, err = utils.ConvetStringToNumber(*amt)
+		card.Amt, err = utils.ConvertStringToNumber(*amt)
 		if err != nil {
 			return nil, 0, err
 		}
 
-		card.Lim, err = utils.ConvetStringToNumber(*lim)
+		card.Lim, err = utils.ConvertStringToNumber(*lim)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -737,17 +737,17 @@ func (c *MysqlClient) FindOrderByAddress(receiveAddress string, limit, offset in
 			return nil, 0, err
 		}
 
-		card.Max, err = utils.ConvetStringToNumber(*max)
+		card.Max, err = utils.ConvertStringToNumber(*max)
 		if err != nil {
 			return nil, 0, err
 		}
 
-		card.Amt, err = utils.ConvetStringToNumber(*amt)
+		card.Amt, err = utils.ConvertStringToNumber(*amt)
 		if err != nil {
 			return nil, 0, err
 		}
 
-		card.Lim, err = utils.ConvetStringToNumber(*lim)
+		card.Lim, err = utils.ConvertStringToNumber(*lim)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -849,9 +849,9 @@ FROM drc20_info ci left join drc20_collect di on ci.tick = di.tick
 			return nil, 0, err
 		}
 
-		card.Max, _ = utils.ConvetStr(*max)
-		card.Amt, _ = utils.ConvetStr(*amt)
-		card.Lim, _ = utils.ConvetStr(*lim)
+		card.Max, _ = utils.ConvertStr(*max)
+		card.Amt, _ = utils.ConvertStr(*amt)
+		card.Lim, _ = utils.ConvertStr(*lim)
 		card.Inscription = card.Drc20TxHash + "i0"
 		card.Drc20Inscription = card.Drc20Inscription + "i0"
 

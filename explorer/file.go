@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-func (e Explorer) fileDecode(tx *btcjson.TxRawResult, number int64) (*models.FileInfo, error) {
+func (e *Explorer) fileDecode(tx *btcjson.TxRawResult, number int64) (*models.FileInfo, error) {
 
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Hash).First(&models.FileInfo{}).Error
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -87,7 +87,7 @@ func (e Explorer) fileDecode(tx *btcjson.TxRawResult, number int64) (*models.Fil
 	return file, nil
 }
 
-func (e Explorer) fileDeploy(model *models.FileInfo) error {
+func (e *Explorer) fileDeploy(model *models.FileInfo) error {
 
 	log.Info("explorer", "p", "file", "op", "deploy", "tx_hash", model.TxHash)
 
@@ -133,6 +133,37 @@ func (e *Explorer) fileTransfer(model *models.FileInfo) error {
 	if err := tx.Commit().Error; err != nil {
 		tx.Rollback()
 		return fmt.Errorf("fileTransfer commit err: %s order_id: %s", err, model.OrderId)
+	}
+
+	return nil
+}
+
+func (e *Explorer) fileFork(tx *gorm.DB, height int64) error {
+	log.Info("fork", "file", height)
+	// file
+	var fileReverts []*models.FileRevert
+	err := tx.Model(&models.FileRevert{}).
+		Where("block_number > ?", height).
+		Order("id desc").
+		Find(&fileReverts).Error
+
+	if err != nil {
+		return fmt.Errorf("file revert error: %v", err)
+	}
+
+	for _, revert := range fileReverts {
+		if revert.ToAddress != "" && revert.FromAddress == "" {
+			err := tx.Where("file_id = ? AND holder_address = ?", revert.FileId, revert.ToAddress).
+				Delete(&models.FileCollectAddress{}).Error
+			if err != nil {
+				return fmt.Errorf("fileFork burn error: %v", err)
+			}
+		} else {
+			err = e.dbc.TransferFile(tx, revert.ToAddress, revert.FromAddress, revert.FileId, "", height, true)
+			if err != nil {
+				return fmt.Errorf("fileFork Transfer error: %v", err)
+			}
+		}
 	}
 
 	return nil

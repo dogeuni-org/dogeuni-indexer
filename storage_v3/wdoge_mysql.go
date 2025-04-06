@@ -21,7 +21,7 @@ func (c *MysqlClient) FindWDogeInfoById(OrderId string) (*models.WDogeInfo, erro
 			return nil, err
 		}
 
-		wdoge.Amt, _ = utils.ConvetStringToNumber(amt)
+		wdoge.Amt, _ = utils.ConvertStringToNumber(amt)
 
 		return wdoge, err
 	}
@@ -79,7 +79,7 @@ func (c *MysqlClient) FindWDogeInfo(orderId, op, holder_address string, limit, o
 			return nil, 0, err
 		}
 
-		wdoge.Amt, _ = utils.ConvetStringToNumber(amt)
+		wdoge.Amt, _ = utils.ConvertStringToNumber(amt)
 		wdoges = append(wdoges, wdoge)
 	}
 

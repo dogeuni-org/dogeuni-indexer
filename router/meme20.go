@@ -6,35 +6,28 @@ import (
 	"dogeuni-indexer/utils"
 	"github.com/dogecoinw/doged/rpcclient"
 	"github.com/gin-gonic/gin"
-	shell "github.com/ipfs/go-ipfs-api"
 	"net/http"
 )
 
-var (
-	cacheDrc20CollectAll *models.Drc20CollectCache
-)
-
-type Drc20Router struct {
+type Meme20Router struct {
 	dbc   *storage.DBClient
 	node  *rpcclient.Client
-	ipfs  *shell.Shell
 	level *storage.LevelDB
 }
 
-func NewDrc20Router(db *storage.DBClient, node *rpcclient.Client, level *storage.LevelDB, ipfs *shell.Shell) *Drc20Router {
-	return &Drc20Router{
+func NewMeme20Router(db *storage.DBClient, node *rpcclient.Client, level *storage.LevelDB) *Meme20Router {
+	return &Meme20Router{
 		dbc:   db,
 		node:  node,
 		level: level,
-		ipfs:  ipfs,
 	}
 }
 
-func (r *Drc20Router) Order(c *gin.Context) {
+func (r *Meme20Router) Order(c *gin.Context) {
 	params := &struct {
 		OrderId       string `json:"order_id"`
 		Op            string `json:"op"`
-		Tick          string `json:"tick"`
+		TickId        string `json:"tick_id"`
 		HolderAddress string `json:"holder_address"`
 		ToAddress     string `json:"to_address"`
 		Address       string `json:"address"`
@@ -55,25 +48,25 @@ func (r *Drc20Router) Order(c *gin.Context) {
 		return
 	}
 
-	filter := &models.Drc20Info{
+	filter := &models.Meme20Info{
 		OrderId:       params.OrderId,
 		Op:            params.Op,
-		Tick:          params.Tick,
+		TickId:        params.TickId,
 		HolderAddress: params.HolderAddress,
 		ToAddress:     params.ToAddress,
 		TxHash:        params.TxHash,
 		BlockNumber:   params.BlockNumber,
 	}
 
-	infos := make([]*models.Drc20Info, 0)
+	infos := make([]*models.Meme20Info, 0)
 	total := int64(0)
 
-	subQuery := r.dbc.DB.Model(&models.Drc20Info{})
+	subQuery := r.dbc.DB.Model(&models.Meme20Info{})
 
 	if params.Address != "" {
 		filter.HolderAddress = ""
 		filter.ToAddress = ""
-		subQuery = subQuery.Where("length(to_address) =  34 and (holder_address = ? OR to_address = ?) ", params.Address, params.Address)
+		subQuery = subQuery.Where("holder_address = ? OR to_address = ? ", params.Address, params.Address)
 	}
 
 	err := subQuery.Where(filter).Count(&total).Order("id desc").Limit(params.Limit).Offset(params.OffSet).Find(&infos).Error
@@ -95,9 +88,9 @@ func (r *Drc20Router) Order(c *gin.Context) {
 
 }
 
-func (r *Drc20Router) History(c *gin.Context) {
+func (r *Meme20Router) History(c *gin.Context) {
 	params := &struct {
-		Tick    string `json:"tick"`
+		TickId  string `json:"tick_id"`
 		Address string `json:"address"`
 		Limit   int    `json:"limit"`
 		OffSet  int    `json:"offset"`
@@ -114,17 +107,17 @@ func (r *Drc20Router) History(c *gin.Context) {
 		return
 	}
 
-	filter := &models.Drc20Revert{
-		Tick: params.Tick,
+	filter := &models.Meme20Revert{
+		TickId: params.TickId,
 	}
 
-	infos := make([]*models.Drc20Revert, 0)
+	infos := make([]*models.Meme20Revert, 0)
 	total := int64(0)
 
-	subQuery := r.dbc.DB.Model(&models.Drc20Revert{})
+	subQuery := r.dbc.DB.Model(&models.Meme20Revert{})
 
 	if params.Address != "" {
-		subQuery = subQuery.Where("from_address = ? OR to_address = ?", params.Address, params.Address)
+		subQuery = subQuery.Where("from_address = ? OR to_address = ? ", params.Address, params.Address)
 	}
 
 	err := subQuery.Where(filter).Count(&total).Order("id desc").Limit(params.Limit).Offset(params.OffSet).Find(&infos).Error
@@ -146,9 +139,10 @@ func (r *Drc20Router) History(c *gin.Context) {
 
 }
 
-func (r *Drc20Router) CollectAddress(c *gin.Context) {
+// 查询地址下的所有nft
+func (r *Meme20Router) CollectAddress(c *gin.Context) {
 	params := &struct {
-		Tick          string `json:"tick"`
+		TickId        string `json:"tick_id"`
 		HolderAddress string `json:"holder_address"`
 		Limit         int    `json:"limit"`
 		OffSet        int    `json:"offset"`
@@ -165,28 +159,28 @@ func (r *Drc20Router) CollectAddress(c *gin.Context) {
 		return
 	}
 
-	var total int64
-	results := make([]*models.Drc20CollectAddress, 0)
+	results := make([]*models.Meme20CollectAddress, 0)
+	subQuery := r.dbc.DB.Table("meme20_collect_address AS mca").
+		Select(`mca.tick_id, mca.amt, mc.max_, mc.name, mc.tick, mc.logo, svl.amt0 as lp_amt0 , svl.amt1 as lp_amt1,
+			mca.transactions, 
+			mca.holder_address,
+	        mca.update_date, 
+			mca.create_date`).
+		Joins("LEFT JOIN meme20_collect AS mc ON mca.tick_id = mc.tick_id").
+		Joins("LEFT JOIN swap_v2_liquidity AS svl ON svl.pair_id = mca.tick_id")
 
-	subQuery := r.dbc.DB.Table("drc20_collect_address AS dca").
-		Select(`dca.tick, dca.amt_sum, dca.tick, dc.max_, dc.logo,
-			dca.transactions, 
-			dca.holder_address,
-	        dca.update_date, 
-			dca.create_date`).
-		Joins("LEFT JOIN drc20_collect AS dc ON dca.tick = dc.tick")
-
-	if params.Tick != "" {
-		subQuery = subQuery.Where("dca.tick = ?", params.Tick)
+	if params.TickId != "" {
+		subQuery = subQuery.Where("mca.tick_id = ?", params.TickId)
 	}
 
 	if params.HolderAddress != "" {
-		subQuery = subQuery.Where("dca.holder_address = ?", params.HolderAddress)
+		subQuery = subQuery.Where("mca.holder_address = ?", params.HolderAddress)
 	}
 
+	total := int64(0)
 	err := subQuery.
 		Count(&total).
-		Order("CAST(dca.amt_sum AS DECIMAL(64,0)) DESC").
+		Order("CAST(mca.amt AS DECIMAL(64,0)) DESC").
 		Limit(params.Limit).
 		Offset(params.OffSet).
 		Scan(&results).Error
@@ -208,10 +202,10 @@ func (r *Drc20Router) CollectAddress(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-func (r *Drc20Router) Collect(c *gin.Context) {
+func (r *Meme20Router) Collect(c *gin.Context) {
 	params := &struct {
 		HolderAddress string `json:"holder_address"`
-		Tick          string `json:"tick"`
+		TickId        string `json:"tick_id"`
 	}{}
 
 	if err := c.ShouldBindJSON(&params); err != nil {
@@ -222,28 +216,18 @@ func (r *Drc20Router) Collect(c *gin.Context) {
 		return
 	}
 
-	maxHeight := 0
-	err := r.dbc.DB.Model(&models.Block{}).Select("max(block_number)").Scan(&maxHeight).Error
-	if params.Tick == "" && params.HolderAddress == "" {
-		if cacheDrc20CollectAll != nil && cacheDrc20CollectAll.CacheNumber == int64(maxHeight) {
-			result := &utils.HttpResult{}
-			result.Code = 200
-			result.Msg = "success"
-			result.Data = cacheDrc20CollectAll.Results
-			result.Total = cacheDrc20CollectAll.Total
-			c.JSON(http.StatusOK, result)
-			return
-		}
-	}
+	results := make([]*models.Meme20Collect, 0)
+	subQuery := r.dbc.DB.Table("meme20_collect AS di").
+		Select(`di.tick, di.tick_id, di.max_, di.dec_, di.name, 
+			di.transactions, 
+			di.holder_address,
+	        di.update_date, 
+			di.create_date,
+			(select count(id) from meme20_collect_address as mca where mca.tick_id = di.tick_id) AS holders,
+            di.logo, di.reserve, di.tag, di.description, di.twitter, di.telegram, di.discord, di.website, di.youtube, di.tiktok, di.is_check`)
 
-	results := make([]*models.Drc20CollectRouter, 0)
-	subQuery := r.dbc.DB.Table("drc20_collect AS di").
-		Select(`di.tick, di.amt_sum as mint_amt, di.max_ as max_amt, di.lim_, di.transactions, di.holder_address as deploy_by,
-	        di.update_date AS last_mint_time, (select count(*) from drc20_collect_address where tick = di.tick) AS holders,
-			di.create_date AS deploy_time, di.tx_hash as inscription, di.logo, di.introduction, di.white_paper, di.official, di.telegram, di.discorad, di.twitter, di.facebook, di.github,di.is_check`)
-
-	if params.Tick != "" {
-		subQuery = subQuery.Where("di.tick = ?", params.Tick)
+	if params.TickId != "" {
+		subQuery = subQuery.Where("di.tick_id = ?", params.TickId)
 	}
 
 	if params.HolderAddress != "" {
@@ -251,7 +235,7 @@ func (r *Drc20Router) Collect(c *gin.Context) {
 	}
 
 	total := int64(0)
-	err = subQuery.
+	err := subQuery.
 		Count(&total).
 		Order("di.create_date DESC").
 		Scan(&results).Error
@@ -266,24 +250,18 @@ func (r *Drc20Router) Collect(c *gin.Context) {
 
 	if params.HolderAddress == "" {
 		for _, result := range results {
-			if result.IsCheck == 0 {
+			if result.IsCheck == 1 {
 				de := ""
-				result.Logo = &de
-				result.Introduction = &de
-				result.WhitePaper = &de
-				result.Official = &de
-				result.Telegram = &de
-				result.Discorad = &de
-				result.Twitter = &de
-				result.Facebook = &de
-				result.Github = &de
+				result.Description = &de
+				result.Logo = ""
+				result.Telegram = nil
+				result.Twitter = nil
+				result.Discord = nil
+				result.Website = nil
+				result.Youtube = nil
+				result.Tiktok = nil
 			}
 		}
-	}
-
-	cacheDrc20CollectAll = &models.Drc20CollectCache{
-		CacheNumber: int64(maxHeight),
-		Results:     results,
 	}
 
 	result := &utils.HttpResult{}

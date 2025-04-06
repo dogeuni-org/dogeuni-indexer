@@ -94,8 +94,8 @@ func (c *MysqlClient) FindCMCSummaryK(tick, dateInterval string) ([]*SwapInfoSum
 			return nil, err
 		}
 
-		result.BaseVolume, _ = utils.ConvetStr(baseVolume)
-		result.QuoteVolume, _ = utils.ConvetStr(quoteVolume)
+		result.BaseVolume, _ = utils.ConvertStr(baseVolume)
+		result.QuoteVolume, _ = utils.ConvertStr(quoteVolume)
 		results = append(results, result)
 	}
 
@@ -120,7 +120,7 @@ func (c *MysqlClient) FindCMCSummaryK2(tick, dateInterval string) ([]*SwapInfoSu
 			return nil, err
 		}
 
-		result.BaseVolume, _ = utils.ConvetStr(baseVolume)
+		result.BaseVolume, _ = utils.ConvertStr(baseVolume)
 		results = append(results, result)
 	}
 
@@ -172,8 +172,8 @@ ON
 			return nil, err
 		}
 
-		result.Liquidity, _ = utils.ConvetStr(Liquidity)
-		result.BaseVolume, _ = utils.ConvetStr(BaseVolume)
+		result.Liquidity, _ = utils.ConvertStr(Liquidity)
+		result.BaseVolume, _ = utils.ConvertStr(BaseVolume)
 
 		results = append(results, result)
 	}
@@ -221,8 +221,8 @@ func (c *MysqlClient) FindCMCSummaryTVL(tick0, tick1 string) ([]*SwapInfoSummary
 			return nil, err
 		}
 
-		result.Liquidity, _ = utils.ConvetStr(Liquidity)
-		result.BaseVolume, _ = utils.ConvetStr(BaseVolume)
+		result.Liquidity, _ = utils.ConvertStr(Liquidity)
+		result.BaseVolume, _ = utils.ConvertStr(BaseVolume)
 
 		results = append(results, result)
 	}
@@ -257,9 +257,9 @@ func (c *MysqlClient) FindCMCSummaryKNew(tick, dateInterval string) (*SwapInfoSu
 			return nil, err
 		}
 
-		swap.Amt0, _ = utils.ConvetStringToNumber(amt0)
-		swap.Amt1, _ = utils.ConvetStringToNumber(amt1)
-		swap.Amt1Out, _ = utils.ConvetStringToNumber(amt1out)
+		swap.Amt0, _ = utils.ConvertStringToNumber(amt0)
+		swap.Amt1, _ = utils.ConvertStringToNumber(amt1)
+		swap.Amt1Out, _ = utils.ConvertStringToNumber(amt1out)
 		swaps = append(swaps, swap)
 	}
 

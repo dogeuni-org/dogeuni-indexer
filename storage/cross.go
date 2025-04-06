@@ -6,7 +6,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func (c *DBClient) CrossDeploy(tx *gorm.DB, cross *models.CrossInfo) error {
+func (db *DBClient) CrossDeploy(tx *gorm.DB, cross *models.CrossInfo) error {
 
 	//WDOGE(WRAPPED-DOGE)
 	tick := "W" + cross.Tick + "(WRAPPED-" + cross.Tick + ")"
@@ -48,9 +48,9 @@ func (c *DBClient) CrossDeploy(tx *gorm.DB, cross *models.CrossInfo) error {
 	return nil
 }
 
-func (c *DBClient) CrossMint(tx *gorm.DB, cross *models.CrossInfo) error {
+func (db *DBClient) CrossMint(tx *gorm.DB, cross *models.CrossInfo) error {
 
-	err := c.MintDrc20(tx, cross.Tick, cross.ToAddress, cross.Amt.Int(), cross.TxHash, cross.BlockNumber, false)
+	err := db.MintDrc20(tx, cross.Tick, cross.ToAddress, cross.Amt.Int(), cross.TxHash, cross.BlockNumber, false)
 	if err != nil {
 		return err
 	}
@@ -58,8 +58,8 @@ func (c *DBClient) CrossMint(tx *gorm.DB, cross *models.CrossInfo) error {
 	return nil
 }
 
-func (c *DBClient) CrossBurn(tx *gorm.DB, cross *models.CrossInfo) error {
-	err := c.BurnDrc20(tx, cross.Tick, cross.HolderAddress, cross.Amt.Int(), cross.TxHash, cross.BlockNumber, false)
+func (db *DBClient) CrossBurn(tx *gorm.DB, cross *models.CrossInfo) error {
+	err := db.BurnDrc20(tx, cross.Tick, cross.HolderAddress, cross.Amt.Int(), cross.TxHash, cross.BlockNumber, false)
 	if err != nil {
 		return err
 	}

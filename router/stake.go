@@ -4,23 +4,20 @@ import (
 	"dogeuni-indexer/models"
 	"dogeuni-indexer/storage"
 	"dogeuni-indexer/utils"
-	"dogeuni-indexer/verifys"
 	"github.com/dogecoinw/doged/rpcclient"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
 
 type StakeRouter struct {
-	dbc    *storage.DBClient
-	node   *rpcclient.Client
-	verify *verifys.Verifys
+	dbc  *storage.DBClient
+	node *rpcclient.Client
 }
 
-func NewStakeRouter(db *storage.DBClient, node *rpcclient.Client, verify *verifys.Verifys) *StakeRouter {
+func NewStakeRouter(db *storage.DBClient, node *rpcclient.Client) *StakeRouter {
 	return &StakeRouter{
-		dbc:    db,
-		node:   node,
-		verify: verify,
+		dbc:  db,
+		node: node,
 	}
 }
 
@@ -28,6 +25,7 @@ func (r *StakeRouter) Order(c *gin.Context) {
 	type params struct {
 		Tick          string `json:"tick"`
 		HolderAddress string `json:"holder_address"`
+		TxHash        string `json:"tx_hash"`
 		BlockNumber   int64  `json:"block_number"`
 		Limit         int    `json:"limit"`
 		OffSet        int    `json:"offset"`
@@ -49,6 +47,7 @@ func (r *StakeRouter) Order(c *gin.Context) {
 	filter := &models.StakeInfo{
 		Tick:          p.Tick,
 		HolderAddress: p.HolderAddress,
+		TxHash:        p.TxHash,
 		BlockNumber:   p.BlockNumber,
 	}
 

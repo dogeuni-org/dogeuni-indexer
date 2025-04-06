@@ -6,7 +6,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func (c *DBClient) FileDeploy(tx *gorm.DB, file *models.FileInfo) error {
+func (db *DBClient) FileDeploy(tx *gorm.DB, file *models.FileInfo) error {
 
 	fileCollectAddress := &models.FileCollectAddress{
 		FileId:        file.FileId,
@@ -34,8 +34,8 @@ func (c *DBClient) FileDeploy(tx *gorm.DB, file *models.FileInfo) error {
 	return nil
 }
 
-func (c *DBClient) FileTransfer(tx *gorm.DB, file *models.FileInfo) error {
-	err := c.TransferFile(tx, file.HolderAddress, file.ToAddress, file.FileId, file.TxHash, file.BlockNumber, false)
+func (db *DBClient) FileTransfer(tx *gorm.DB, file *models.FileInfo) error {
+	err := db.TransferFile(tx, file.HolderAddress, file.ToAddress, file.FileId, file.TxHash, file.BlockNumber, false)
 	if err != nil {
 		return fmt.Errorf("transfer err: %s order_id: %s", err, file.OrderId)
 	}

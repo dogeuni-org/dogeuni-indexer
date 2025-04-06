@@ -4,7 +4,6 @@ import (
 	"dogeuni-indexer/models"
 	"dogeuni-indexer/storage"
 	"dogeuni-indexer/utils"
-	"dogeuni-indexer/verifys"
 	"github.com/dogecoinw/doged/rpcclient"
 	"github.com/gin-gonic/gin"
 	shell "github.com/ipfs/go-ipfs-api"
@@ -12,20 +11,18 @@ import (
 )
 
 type InfoRouter struct {
-	dbc    *storage.DBClient
-	node   *rpcclient.Client
-	ipfs   *shell.Shell
-	level  *storage.LevelDB
-	verify *verifys.Verifys
+	dbc   *storage.DBClient
+	node  *rpcclient.Client
+	ipfs  *shell.Shell
+	level *storage.LevelDB
 }
 
-func NewInfoRouter(db *storage.DBClient, node *rpcclient.Client, level *storage.LevelDB, ipfs *shell.Shell, verify *verifys.Verifys) *InfoRouter {
+func NewInfoRouter(db *storage.DBClient, node *rpcclient.Client, level *storage.LevelDB, ipfs *shell.Shell) *InfoRouter {
 	return &InfoRouter{
-		dbc:    db,
-		node:   node,
-		ipfs:   ipfs,
-		level:  level,
-		verify: verify,
+		dbc:   db,
+		node:  node,
+		ipfs:  ipfs,
+		level: level,
 	}
 }
 
@@ -69,7 +66,7 @@ func (r *InfoRouter) BlockNumber(c *gin.Context) {
 	}
 
 	data := make(map[string]interface{})
-	data["unielon_height"] = maxHeight
+	data["index_height"] = maxHeight
 	data["chain_height"] = chainHeight
 
 	result := &utils.HttpResult{}

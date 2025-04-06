@@ -12,6 +12,7 @@ type StakeV2Info struct {
 	Reward        *Number   `json:"reward"`
 	EachReward    *Number   `json:"each_reward"`
 	Amt           *Number   `json:"amt"`
+	LockBlock     int64     `json:"lock_block"`
 	FeeTxHash     string    `json:"fee_tx_hash"`
 	TxHash        string    `json:"tx_hash"`
 	BlockHash     string    `json:"block_hash"`
@@ -39,7 +40,9 @@ type StakeV2Collect struct {
 	EachReward        *Number   `json:"each_reward"`
 	AccRewardPerShare *Number   `json:"acc_reward_per_share"`
 	LastRewardBlock   int64     `json:"last_reward_block"`
+	LastBlock         int64     `json:"last_block"`
 	ReservesAddress   string    `json:"reserves_address"`
+	HolderAddress     string    `json:"holder_address"`
 	UpdateDate        LocalTime `json:"update_date"`
 	CreateDate        LocalTime `json:"create_date"`
 }
@@ -57,6 +60,7 @@ type StakeV2CollectAddress struct {
 	PendingReward *Number   `json:"pending_reward"`
 	HolderAddress string    `json:"holder_address"`
 	CardiAmt      *big.Int  `gorm:"-" json:"cardi_amt"`
+	LastBlock     int64     `json:"last_block"`
 	UpdateDate    LocalTime `json:"update_date"`
 	CreateDate    LocalTime `json:"create_date"`
 }

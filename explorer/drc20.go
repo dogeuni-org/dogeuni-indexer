@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/dogecoinw/doged/btcjson"
 	"github.com/dogecoinw/doged/chaincfg/chainhash"
+	"github.com/dogecoinw/go-dogecoin/log"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"math/big"
@@ -44,7 +45,7 @@ func (e *Explorer) drc20Decode(tx *btcjson.TxRawResult, pushedData []byte, numbe
 	if card.Op == "deploy" {
 		card.HolderAddress = tx.Vout[0].ScriptPubKey.Addresses[0]
 		if tx.Vout[0].Value != 0.001 {
-			return nil, fmt.Errorf("The amount of tokens exceeds the 0.0001")
+			return nil, fmt.Errorf("the amount of tokens exceeds the 0.0001")
 		}
 	}
 
@@ -57,7 +58,7 @@ func (e *Explorer) drc20Decode(tx *btcjson.TxRawResult, pushedData []byte, numbe
 		}
 
 		if tx.Vout[0].Value != 0.001*float64(card.Repeat) {
-			return nil, fmt.Errorf("The amount of tokens exceeds the 0.0001")
+			return nil, fmt.Errorf("the amount of tokens exceeds the 0.0001")
 		}
 
 	}
@@ -89,19 +90,19 @@ func (e *Explorer) drc20Decode(tx *btcjson.TxRawResult, pushedData []byte, numbe
 
 	for _, v := range strings.Split(card.ToAddress, ",") {
 		if card.HolderAddress == v {
-			return nil, errors.New("The address is not the same as the previous transaction")
+			return nil, errors.New("the address is not the same as the previous transaction")
 		}
 	}
 
 	err = e.dbc.DB.Save(card).Error
 	if err != nil {
-		return nil, fmt.Errorf("Save err: %s", err.Error())
+		return nil, fmt.Errorf("save err: %s", err.Error())
 	}
 
 	return card, nil
 }
 
-func (e Explorer) drc20Deploy(drc20 *models.Drc20Info) error {
+func (e *Explorer) drc20Deploy(drc20 *models.Drc20Info) error {
 	tx := e.dbc.DB.Begin()
 	drc20c := &models.Drc20Collect{
 		Tick:          drc20.Tick,
@@ -123,12 +124,12 @@ func (e Explorer) drc20Deploy(drc20 *models.Drc20Info) error {
 	err = tx.Model(&models.Drc20Info{}).Where("tx_hash = ?", drc20.TxHash).Update("order_status", 0).Error
 	if err != nil {
 		tx.Rollback()
-		return fmt.Errorf("Update err: %s", err.Error())
+		return fmt.Errorf("update err: %s", err.Error())
 	}
 
 	if err := tx.Commit().Error; err != nil {
 		tx.Rollback()
-		return fmt.Errorf("Commit err: %s", err.Error())
+		return fmt.Errorf("commit err: %s", err.Error())
 	}
 
 	return nil
@@ -147,12 +148,12 @@ func (e *Explorer) drc20Mint(drc20 *models.Drc20Info) error {
 	err = tx.Model(&models.Drc20Info{}).Where("tx_hash = ?", drc20.TxHash).Update("order_status", 0).Error
 	if err != nil {
 		tx.Rollback()
-		return fmt.Errorf("Update err: %s", err.Error())
+		return fmt.Errorf("update err: %s", err.Error())
 	}
 
 	if err := tx.Commit().Error; err != nil {
 		tx.Rollback()
-		return fmt.Errorf("Commit err: %s", err.Error())
+		return fmt.Errorf("commit err: %s", err.Error())
 	}
 
 	return nil
@@ -170,12 +171,48 @@ func (e *Explorer) drc20Transfer(drc20 *models.Drc20Info) error {
 	err = tx.Model(&models.Drc20Info{}).Where("tx_hash = ?", drc20.TxHash).Update("order_status", 0).Error
 	if err != nil {
 		tx.Rollback()
-		return fmt.Errorf("Update err: %s", err.Error())
+		return fmt.Errorf("update err: %s", err.Error())
 	}
 
 	if err := tx.Commit().Error; err != nil {
 		tx.Rollback()
-		return fmt.Errorf("Commit err: %s", err.Error())
+		return fmt.Errorf("commit err: %s", err.Error())
+	}
+
+	return nil
+}
+
+func (e *Explorer) drc20Fork(tx *gorm.DB, height int64) error {
+
+	log.Info("fork", "drc20", height)
+
+	var drc20Reverts []*models.Drc20Revert
+	err := tx.Model(&models.Drc20Revert{}).
+		Where("block_number > ?", height).
+		Order("id desc").
+		Find(&drc20Reverts).Error
+
+	if err != nil {
+		return fmt.Errorf("drc20 revert error: %v", err)
+	}
+
+	for _, revert := range drc20Reverts {
+		if revert.ToAddress != "" && revert.FromAddress == "" {
+			err = e.dbc.BurnDrc20(tx, revert.Tick, revert.ToAddress, revert.Amt.Int(), "", 0, true)
+			if err != nil {
+				return fmt.Errorf("drc20 fork burn error: %v", err)
+			}
+		} else if revert.FromAddress != "" && revert.ToAddress == "" {
+			err = e.dbc.MintDrc20(tx, revert.Tick, revert.FromAddress, revert.Amt.Int(), "", 0, true)
+			if err != nil {
+				return fmt.Errorf("drc20 fork mint error: %v", err)
+			}
+		} else {
+			err = e.dbc.TransferDrc20(tx, revert.Tick, revert.ToAddress, revert.FromAddress, revert.Amt.Int(), "", 0, true)
+			if err != nil {
+				return fmt.Errorf("drc20 fork transfer error: %v", err)
+			}
+		}
 	}
 
 	return nil

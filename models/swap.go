@@ -62,55 +62,14 @@ func (SwapLiquidityLP) TableName() string {
 }
 
 type SwapRevert struct {
-	Tick        string   `json:"tick"`
-	FromAddress string   `json:"from_address"`
-	ToAddress   string   `json:"to_address"`
-	Amt         *big.Int `json:"amt"`
-	BlockNumber int64    `json:"block_number"`
+	ID          uint      `gorm:"primarykey"`
+	Op          string    `json:"op"`
+	Tick        string    `json:"tick"`
+	BlockNumber int64     `json:"block_number"`
+	UpdateDate  LocalTime `json:"update_date"`
+	CreateDate  LocalTime `json:"create_date"`
 }
 
 func (SwapRevert) TableName() string {
 	return "swap_revert"
-}
-
-type SwapSummary struct {
-	ID           uint    `gorm:"primarykey" json:"id"`
-	Tick         string  `json:"tick"`
-	Tick0        string  `json:"tick0"`
-	Tick1        string  `json:"tick1"`
-	OpenPrice    float64 `json:"open_price"`
-	ClosePrice   float64 `json:"close_price"`
-	LowestAsk    float64 `json:"lowest_ask"`
-	HighestBid   float64 `json:"highest_bid"`
-	BaseVolume   *Number `json:"base_volume"`
-	LastDate     string  `json:"last_date"`
-	DateInterval string  `json:"date_interval"`
-	DogeUsdt     float64 `json:"doge_usdt"`
-}
-
-func (SwapSummary) TableName() string {
-	return "swap_summary"
-}
-
-type SwapSummaryLiquidity struct {
-	ID           uint      `gorm:"primarykey" json:"id"`
-	Tick         string    `json:"tick"`
-	Tick0        string    `json:"tick0"`
-	Tick1        string    `json:"tick1"`
-	OpenPrice    float64   `json:"open_price"`
-	ClosePrice   float64   `json:"close_price"`
-	LowestAsk    float64   `json:"lowest_ask"`
-	HighestBid   float64   `json:"highest_bid"`
-	BaseVolume   *Number   `json:"base_volume"`
-	QuoteVolume  *Number   `json:"quote_volume"`
-	Liquidity    float64   `json:"liquidity"`
-	LastDate     string    `json:"last_date"`
-	DateInterval string    `json:"date_interval"`
-	DogeUsdt     float64   `json:"doge_usdt"`
-	UpdateDate   LocalTime `json:"update_date"`
-	CreateDate   LocalTime `json:"create_date"`
-}
-
-func (SwapSummaryLiquidity) TableName() string {
-	return "swap_summary_liquidity"
 }

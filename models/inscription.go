@@ -85,6 +85,7 @@ type StakeV2Inscription struct {
 	Amt        string `json:"amt"`
 	Reward     string `json:"reward"`
 	EachReward string `json:"each_reward"`
+	LockBlock  int64  `json:"lock_block"`
 }
 
 type ExchangeInscription struct {
@@ -116,4 +117,56 @@ type BoxInscription struct {
 	LiqAmt   string `json:"liqamt"`
 	LiqBlock int64  `json:"liqblock"`
 	Amt1     string `json:"amt1"`
+}
+
+type Meme20Inscription struct {
+	P      string `json:"p"`
+	Op     string `json:"op"`
+	Tick   string `json:"tick"`
+	TickId string `json:"tick_id"`
+	Name   string `json:"name"`
+	Max    string `json:"max"`
+	Amt    string `json:"amt"`
+}
+
+type PumpInscription struct {
+	P           string `json:"p"`
+	Op          string `json:"op"`
+	PairId      string `json:"pair_id"`
+	Symbol      string `json:"symbol"`
+	Tick        string `json:"tick"`
+	Tick0Id     string `json:"tick0_id"`
+	Tick1Id     string `json:"tick1_id"`
+	Amt         string `json:"amt"`
+	Amt0        string `json:"amt0"`
+	Amt1Min     string `json:"amt1_min"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Twitter     string `json:"twitter"`
+	Telegram    string `json:"telegram"`
+	Website     string `json:"website"`
+	Discord     string `json:"discord"`
+	Logo        string `json:"logo"`
+	Reserve     int    `json:"reserve"`
+	Doge        int    `json:"doge"`
+}
+
+type SwapV2Inscription struct {
+	P         string `json:"p"`
+	Op        string `json:"op"`
+	PairId    string `json:"pair_id"`
+	Tick0Id   string `json:"tick0_id"`
+	Tick1Id   string `json:"tick1_id"`
+	Amt0      string `json:"amt0"`
+	Amt1      string `json:"amt1"`
+	Amt0Min   string `json:"amt0_min"`
+	Amt1Min   string `json:"amt1_min"`
+	Liquidity string `json:"liquidity"`
+	Doge      int    `json:"doge"`
+}
+
+type InviteInscription struct {
+	P             string `json:"p"`
+	Op            string `json:"op"`
+	InviteAddress string `json:"invite_address"`
 }

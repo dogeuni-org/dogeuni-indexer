@@ -4,7 +4,6 @@ import (
 	"dogeuni-indexer/models"
 	"dogeuni-indexer/storage"
 	"dogeuni-indexer/utils"
-	"dogeuni-indexer/verifys"
 	"github.com/dogecoinw/doged/rpcclient"
 	"github.com/gin-gonic/gin"
 	"net/http"
@@ -13,15 +12,12 @@ import (
 type CrossRouter struct {
 	dbc  *storage.DBClient
 	node *rpcclient.Client
-
-	verify *verifys.Verifys
 }
 
-func NewCrossRouter(dbc *storage.DBClient, node *rpcclient.Client, verify *verifys.Verifys) *CrossRouter {
+func NewCrossRouter(dbc *storage.DBClient, node *rpcclient.Client) *CrossRouter {
 	return &CrossRouter{
-		dbc:    dbc,
-		node:   node,
-		verify: verify,
+		dbc:  dbc,
+		node: node,
 	}
 }
 

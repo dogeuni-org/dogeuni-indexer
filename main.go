@@ -8,7 +8,6 @@ import (
 	"dogeuni-indexer/router_v3"
 	"dogeuni-indexer/storage"
 	"dogeuni-indexer/storage_v3"
-	"dogeuni-indexer/verifys"
 	"github.com/dogecoinw/doged/rpcclient"
 	"github.com/dogecoinw/go-dogecoin/log"
 	"github.com/gin-gonic/gin"
@@ -58,8 +57,6 @@ func main() {
 	// not supported in HTTP POST mode.
 	rpcClient, _ := rpcclient.New(connCfg, nil)
 
-	verify := verifys.NewVerifys(dbClient)
-
 	ipfs := shell.NewShell(cfg.Ipfs)
 
 	if cfg.Explorer.Switch {
@@ -74,10 +71,10 @@ func main() {
 
 		grt := gin.Default()
 		grt.Use(func(c *gin.Context) {
-			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")                                               // 允许所有来源访问
-			c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")                // 允许的请求方法
-			c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept") // 允许的请求头部信息
-			c.Writer.Header().Set("Access-Control-Max-Age", "3600")                                                 // 预检请求的有效期，单位为秒
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+			c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
+			c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept")
+			c.Writer.Header().Set("Access-Control-Max-Age", "3600")
 
 			if c.Request.Method == "OPTIONS" {
 				c.AbortWithStatus(200)
@@ -159,19 +156,22 @@ func main() {
 		grt.POST("/v3/nft/order/id", rt.NftInfoById)
 		grt.POST("/v3/nft/order", rt.NftInfo)
 
+		grt.POST("/v3/tx/broadcast", rt.TxBroadcast)
 		// v4
 		v4 := grt.Group("/v4")
 		{
 
-			infoRouter := router.NewInfoRouter(dbClient, rpcClient, levelClient, ipfs, verify)
+			infoRouter := router.NewInfoRouter(dbClient, rpcClient, levelClient, ipfs)
 			v4.POST("/info/lastnumber", infoRouter.LastNumber)
+			v4.POST("/info/blocknumber", infoRouter.BlockNumber)
 
-			drc20Router := router.NewDrc20Router(dbClient, rpcClient, levelClient, ipfs, verify)
+			drc20Router := router.NewDrc20Router(dbClient, rpcClient, levelClient, ipfs)
 			v4.POST("/drc20/order", drc20Router.Order)
 			v4.POST("/drc20/collect", drc20Router.Collect)
 			v4.POST("/drc20/collect-address", drc20Router.CollectAddress)
+			v4.POST("/drc20/history", drc20Router.History)
 
-			swapRouter := router.NewSwapRouter(dbClient, rpcClient, verify)
+			swapRouter := router.NewSwapRouter(dbClient, rpcClient)
 			v4.POST("/swap/order", swapRouter.Order)
 			v4.POST("/swap/liquidity", swapRouter.SwapLiquidity)
 			v4.POST("/swap/liquidity/address", swapRouter.SwapLiquidityHolder)
@@ -183,8 +183,7 @@ func main() {
 			v4.POST("/swap/pair", swapRouter.SwapPair)
 
 			// exchange
-			exchangeRouter := router.NewExchangeRouter(dbClient, rpcClient, verify)
-
+			exchangeRouter := router.NewExchangeRouter(dbClient, rpcClient)
 			v4.POST("/exchange/order", exchangeRouter.Order)
 			v4.POST("/exchange/collect", exchangeRouter.Collect)
 			v4.POST("/exchange/summary", exchangeRouter.Summary)
@@ -192,16 +191,16 @@ func main() {
 			v4.POST("/exchange/k", exchangeRouter.SummaryK)
 
 			// box
-			boxRouter := router.NewBoxRouter(dbClient, rpcClient, verify)
+			boxRouter := router.NewBoxRouter(dbClient, rpcClient)
 			v4.POST("/box/order", boxRouter.Order)
 			v4.POST("/box/collect", boxRouter.Collect)
 
 			// wdoge
-			wdogeRouter := router.NewWdogeRouter(dbClient, rpcClient, verify)
+			wdogeRouter := router.NewWdogeRouter(dbClient, rpcClient)
 			v4.POST("/wdoge/order", wdogeRouter.Order)
 
 			// stake
-			stakeRouter := router.NewStakeRouter(dbClient, rpcClient, verify)
+			stakeRouter := router.NewStakeRouter(dbClient, rpcClient)
 			v4.POST("/stake/order", stakeRouter.Order)
 			v4.POST("/stake/collect", stakeRouter.Collect)
 			v4.POST("/stake/collect-address", stakeRouter.CollectAddress)
@@ -209,13 +208,13 @@ func main() {
 			v4.POST("/stake/total", stakeRouter.Total)
 
 			// nft
-			nftRouter := router.NewNftRouter(dbClient, rpcClient, verify)
+			nftRouter := router.NewNftRouter(dbClient, rpcClient)
 			v4.POST("/nft/order", nftRouter.Order)
 			v4.POST("/nft/collect", nftRouter.Collect)
 			v4.POST("/nft/collect-address", nftRouter.CollectAddress)
 
 			// file
-			fileRouter := router.NewFileRouter(dbClient, rpcClient, ipfs, verify)
+			fileRouter := router.NewFileRouter(dbClient, rpcClient, ipfs)
 			v4.POST("/file/order", fileRouter.Order)
 			v4.POST("/file/collect-address", fileRouter.CollectAddress)
 
@@ -227,7 +226,7 @@ func main() {
 			v4.POST("/file/collections/attributes", fileRouter.CollectionsAttributes)
 
 			// file exchange
-			fileExchangeRouter := router.NewFileExchangeRouter(dbClient, rpcClient, ipfs, verify)
+			fileExchangeRouter := router.NewFileExchangeRouter(dbClient, rpcClient, ipfs)
 			v4.POST("/file-exchange/order", fileExchangeRouter.Order)
 			v4.POST("/file-exchange/activity", fileExchangeRouter.Activity)
 			v4.POST("/file-exchange/collect", fileExchangeRouter.Collect)
@@ -236,9 +235,39 @@ func main() {
 			v4.POST("/file-exchange/inscriptions", fileExchangeRouter.Inscriptions)
 
 			// cross
-			crossRouter := router.NewCrossRouter(dbClient, rpcClient, verify)
+			crossRouter := router.NewCrossRouter(dbClient, rpcClient)
 			v4.POST("/cross/order", crossRouter.Order)
 			v4.POST("/cross/collect", crossRouter.Collect)
+			// meme20
+			meme20Router := router.NewMeme20Router(dbClient, rpcClient, levelClient)
+			v4.POST("/meme20/order", meme20Router.Order)
+			v4.POST("/meme20/collect", meme20Router.Collect)
+			v4.POST("/meme20/collect-address", meme20Router.CollectAddress)
+			v4.POST("/meme20/history", meme20Router.History)
+
+			// pump
+			pumpRouter := router.NewPumpRouter(dbClient, rpcClient)
+			v4.POST("/pump/order", pumpRouter.Order)
+			v4.POST("/pump/mergeorder", pumpRouter.MergeOrder)
+			v4.POST("/pump/liquidity", pumpRouter.Liquidity)
+			v4.POST("/pump/board", pumpRouter.Board)
+			v4.POST("/pump/k", pumpRouter.K)
+			v4.POST("/pump/king", pumpRouter.King)
+
+			// swapv2
+			swapV2Router := router.NewSwapV2Router(dbClient, rpcClient)
+			v4.POST("/swap_v2/order", swapV2Router.Order)
+			v4.POST("/swap_v2/liquidity", swapV2Router.Liquidity)
+			v4.POST("/swap_v2/liquidity/address", swapV2Router.SwapLiquidityHolder)
+			v4.POST("/swap_v2/price", swapV2Router.SwapPrice)
+			v4.POST("/swap_v2/k", pumpRouter.K)
+
+			// invite
+			inviteRouter := router.NewInviteRouter(dbClient, rpcClient, levelClient)
+			v4.POST("/invite/order", inviteRouter.Order)
+			v4.POST("/invite/collect", inviteRouter.Collect)
+			v4.POST("/invite/pump-reword", inviteRouter.PumpReward)
+			v4.POST("/invite/pump-reword-total", inviteRouter.PumpRewardTotal)
 		}
 
 		err := grt.Run(cfg.HttpServer.Server)

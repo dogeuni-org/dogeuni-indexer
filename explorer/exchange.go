@@ -13,6 +13,7 @@ import (
 	"github.com/dogecoinw/go-dogecoin/log"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"math/big"
 )
 
 func (e *Explorer) exchangeDecode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.ExchangeInfo, error) {
@@ -137,5 +138,73 @@ func (e *Explorer) exchangeCancel(ex *models.ExchangeInfo) error {
 		tx.Rollback()
 		return fmt.Errorf("tx.Commit err: %s", err.Error())
 	}
+	return nil
+}
+
+func (e *Explorer) exchangeFork(tx *gorm.DB, height int64) error {
+
+	log.Info("fork", "Exchange", height)
+	// Exchange
+	var exchangeReverts []*models.ExchangeRevert
+	err := tx.Model(&models.ExchangeRevert{}).
+		Where("block_number > ?", height).
+		Order("id desc").
+		Find(&exchangeReverts).Error
+
+	if err != nil {
+		return fmt.Errorf("exchange fork error: %v", err)
+	}
+
+	for _, revert := range exchangeReverts {
+		if revert.Op == "create" {
+			err = tx.Where("ex_id = ?", revert.ExId).Delete(&models.ExchangeCollect{}).Error
+			if err != nil {
+				return fmt.Errorf("delete exchange_collect error: %v", err)
+			}
+		}
+
+		if revert.Op == "trade" {
+			ec := &models.ExchangeCollect{}
+			err = tx.Where("ex_id = ?", revert.ExId).First(ec).Error
+			if err != nil {
+				return fmt.Errorf("select exchange_collect error: %v", err)
+			}
+
+			amt0 := ec.Amt0Finish.Int()
+			amt1 := ec.Amt1Finish.Int()
+
+			amt0_0 := big.NewInt(0).Sub(amt0, revert.Amt0.Int())
+			amt1_1 := big.NewInt(0).Sub(amt1, revert.Amt1.Int())
+
+			err = tx.Model(&models.ExchangeCollect{}).
+				Where("ex_id = ?", revert.ExId).
+				Updates(map[string]interface{}{
+					"amt0_finish": amt0_0.String(),
+					"amt1_finish": amt1_1.String(),
+				}).Error
+
+			if err != nil {
+				return fmt.Errorf("update exchange_collect error: %v", err)
+			}
+		}
+
+		if revert.Op == "cancel" {
+
+			ec := &models.ExchangeCollect{}
+			err = tx.Where("ex_id = ?", revert.ExId).First(ec).Error
+			if err != nil {
+				return fmt.Errorf("select exchange_collect error: %v", err)
+			}
+
+			amt0 := ec.Amt0Finish.Int()
+			amt0_0 := big.NewInt(0).Add(amt0, revert.Amt0.Int())
+
+			err = tx.Model(&models.ExchangeCollect{}).Where("ex_id = ?", revert.ExId).Update("amt0_finish", amt0_0.String()).Error
+			if err != nil {
+				return fmt.Errorf("update exchange_collect error: %v", err)
+			}
+		}
+	}
+
 	return nil
 }

@@ -4,7 +4,6 @@ import (
 	"dogeuni-indexer/models"
 	"dogeuni-indexer/storage"
 	"dogeuni-indexer/utils"
-	"dogeuni-indexer/verifys"
 	"github.com/dogecoinw/doged/rpcclient"
 	"github.com/gin-gonic/gin"
 	shell "github.com/ipfs/go-ipfs-api"
@@ -17,16 +16,13 @@ type FileExchangeRouter struct {
 	dbc  *storage.DBClient
 	node *rpcclient.Client
 	ipfs *shell.Shell
-
-	verify *verifys.Verifys
 }
 
-func NewFileExchangeRouter(db *storage.DBClient, node *rpcclient.Client, ipfs *shell.Shell, verify *verifys.Verifys) *FileExchangeRouter {
+func NewFileExchangeRouter(db *storage.DBClient, node *rpcclient.Client, ipfs *shell.Shell) *FileExchangeRouter {
 	return &FileExchangeRouter{
-		dbc:    db,
-		node:   node,
-		ipfs:   ipfs,
-		verify: verify,
+		dbc:  db,
+		node: node,
+		ipfs: ipfs,
 	}
 }
 
@@ -37,6 +33,7 @@ func (r *FileExchangeRouter) Order(c *gin.Context) {
 		FileId        string `json:"file_id"`
 		Op            string `json:"op"`
 		HolderAddress string `json:"holder_address"`
+		TxHash        string `json:"tx_hash"`
 		BlockNumber   int64  `json:"block_number"`
 		Limit         int    `json:"limit"`
 		OffSet        int    `json:"offset"`
@@ -57,6 +54,10 @@ func (r *FileExchangeRouter) Order(c *gin.Context) {
 		Joins("LEFT JOIN file_collect_address fca ON fei.file_id = fca.file_id").
 		Joins("LEFT JOIN file_meta_inscription fmi ON fei.file_id = fmi.file_id").
 		Joins("LEFT JOIN file_meta fm ON fm.meta_id = fmi.meta_id")
+
+	if params.TxHash != "" {
+		subQuery = subQuery.Where("fei.tx_hash = ?", params.TxHash)
+	}
 
 	if params.OrderId != "" {
 		subQuery = subQuery.Where("fei.order_id = ?", params.OrderId)

@@ -4,7 +4,6 @@ import (
 	"dogeuni-indexer/models"
 	"dogeuni-indexer/storage"
 	"dogeuni-indexer/utils"
-	"dogeuni-indexer/verifys"
 	"github.com/dogecoinw/doged/rpcclient"
 	"github.com/gin-gonic/gin"
 	"net/http"
@@ -13,15 +12,12 @@ import (
 type StakeV2Router struct {
 	dbc  *storage.DBClient
 	node *rpcclient.Client
-
-	verify *verifys.Verifys
 }
 
-func NewStakeV2Router(dbc *storage.DBClient, node *rpcclient.Client, verify *verifys.Verifys) *StakeV2Router {
+func NewStakeV2Router(dbc *storage.DBClient, node *rpcclient.Client) *StakeV2Router {
 	return &StakeV2Router{
-		dbc:    dbc,
-		node:   node,
-		verify: verify,
+		dbc:  dbc,
+		node: node,
 	}
 }
 
@@ -165,7 +161,6 @@ func (s *StakeV2Router) Reward(c *gin.Context) {
 	}
 
 	p := &params{}
-
 	if err := c.ShouldBindJSON(p); err != nil {
 		result := &utils.HttpResult{}
 		result.Code = 500
@@ -174,7 +169,7 @@ func (s *StakeV2Router) Reward(c *gin.Context) {
 		return
 	}
 
-	reward, err := s.dbc.StakeGetRewardV2(p.HolderAddress, p.StakeId, p.BlockNumber)
+	reward, err := s.dbc.StakeGetRewardV2(p.StakeId, p.HolderAddress, p.BlockNumber)
 
 	if err != nil {
 		result := &utils.HttpResult{}
@@ -185,6 +180,7 @@ func (s *StakeV2Router) Reward(c *gin.Context) {
 	}
 
 	result := &utils.HttpResult{}
+	result.Msg = "success"
 	result.Code = 200
 	result.Data = reward
 	c.JSON(http.StatusOK, result)

@@ -65,7 +65,7 @@ func (c *MysqlClient) FindStakeInfo(orderId, op, tick, holder_address string, li
 			return nil, 0, err
 		}
 
-		stake.Amt, _ = utils.ConvetStringToNumber(amt)
+		stake.Amt, _ = utils.ConvertStringToNumber(amt)
 		stakes = append(stakes, stake)
 	}
 
@@ -97,7 +97,7 @@ func (c *MysqlClient) FindStakeInfoByFee(feeAddress string) (*models.StakeInfo, 
 		var amt string
 		err := rows.Scan(&nft.OrderId, &nft.Op, &nft.Tick, &amt, &nft.FeeTxHash, &nft.TxHash, &nft.BlockHash, &nft.BlockNumber, &nft.FeeAddress, &nft.HolderAddress, &nft.OrderStatus, &nft.UpdateDate, &nft.CreateDate)
 
-		nft.Amt, _ = utils.ConvetStringToNumber(amt)
+		nft.Amt, _ = utils.ConvertStringToNumber(amt)
 		if err != nil {
 			return nil, err
 		}
@@ -131,8 +131,8 @@ func (c *MysqlClient) FindStakeAll() ([]*models.StakeCollect, int64, error) {
 			return nil, 0, err
 		}
 
-		result.Amt, _ = utils.ConvetStringToNumber(amt)
-		result.Reward, _ = utils.ConvetStringToNumber(reward)
+		result.Amt, _ = utils.ConvertStringToNumber(amt)
+		result.Reward, _ = utils.ConvertStringToNumber(reward)
 
 		results = append(results, result)
 	}
@@ -169,8 +169,8 @@ func (c *MysqlClient) FindStakeCollectByTick(tx *sql.Tx, tick string) (*models.S
 			return nil, err
 		}
 
-		stake.Amt, _ = utils.ConvetStringToNumber(amt)
-		stake.Reward, _ = utils.ConvetStringToNumber(reward)
+		stake.Amt, _ = utils.ConvertStringToNumber(amt)
+		stake.Reward, _ = utils.ConvertStringToNumber(reward)
 		return stake, nil
 	}
 
@@ -195,8 +195,8 @@ func (c *MysqlClient) FindStakeCollect() ([]*models.StakeCollect, error) {
 			return nil, err
 		}
 
-		stake.Amt, _ = utils.ConvetStringToNumber(amt)
-		stake.Reward, _ = utils.ConvetStringToNumber(reward)
+		stake.Amt, _ = utils.ConvertStringToNumber(amt)
+		stake.Reward, _ = utils.ConvertStringToNumber(reward)
 		results = append(results, stake)
 	}
 
@@ -244,9 +244,9 @@ func (c *MysqlClient) FindStakeByAddressTick(holder_address, tick string, limit,
 			return nil, 0, err
 		}
 
-		result.Amt, _ = utils.ConvetStringToNumber(amt)
-		result.Reward, _ = utils.ConvetStringToNumber(reward)
-		result.ReceivedReward, _ = utils.ConvetStringToNumber(received_reward)
+		result.Amt, _ = utils.ConvertStringToNumber(amt)
+		result.Reward, _ = utils.ConvertStringToNumber(reward)
+		result.ReceivedReward, _ = utils.ConvertStringToNumber(received_reward)
 		stakeas = append(stakeas, result)
 	}
 
@@ -294,7 +294,7 @@ func (c *MysqlClient) FindStakeCollectAddressAll() ([]*StakeCollectAddress, erro
 		if err != nil {
 			return nil, err
 		}
-		result.CardiAmt, _ = utils.ConvetStr(cardiAmt)
+		result.CardiAmt, _ = utils.ConvertStr(cardiAmt)
 		stakeas = append(stakeas, result)
 	}
 
@@ -319,9 +319,9 @@ func (c *MysqlClient) FindStakeCollectAddressByTickAndHolder(tx *sql.Tx, holder_
 		if err != nil {
 			return nil, err
 		}
-		result.Amt, _ = utils.ConvetStringToNumber(amt)
-		result.Reward, _ = utils.ConvetStringToNumber(reward)
-		result.ReceivedReward, _ = utils.ConvetStringToNumber(received_reward)
+		result.Amt, _ = utils.ConvertStringToNumber(amt)
+		result.Reward, _ = utils.ConvertStringToNumber(reward)
+		result.ReceivedReward, _ = utils.ConvertStringToNumber(received_reward)
 		return result, nil
 	}
 
@@ -346,9 +346,9 @@ func (c *MysqlClient) FindStakeCollectAddressByTick(holder_address, tick string)
 		if err != nil {
 			return nil, err
 		}
-		result.Amt, _ = utils.ConvetStringToNumber(amt)
-		result.Reward, _ = utils.ConvetStringToNumber(reward)
-		result.ReceivedReward, _ = utils.ConvetStringToNumber(received_reward)
+		result.Amt, _ = utils.ConvertStringToNumber(amt)
+		result.Reward, _ = utils.ConvertStringToNumber(reward)
+		result.ReceivedReward, _ = utils.ConvertStringToNumber(received_reward)
 		return result, nil
 	}
 
@@ -372,7 +372,7 @@ func (c *MysqlClient) FindStakeCollectReward() ([]*models.StakeCollectReward, er
 			return nil, err
 		}
 
-		result.Reward, _ = utils.ConvetStringToNumber(reward)
+		result.Reward, _ = utils.ConvertStringToNumber(reward)
 		results = append(results, result)
 	}
 
@@ -396,7 +396,7 @@ func (c *MysqlClient) FindStakeRewardInfo(orderId string) ([]*models.StakeRevert
 			return nil, err
 		}
 
-		result.Amt, _ = utils.ConvetStringToNumber(amt)
+		result.Amt, _ = utils.ConvertStringToNumber(amt)
 		results = append(results, result)
 	}
 
