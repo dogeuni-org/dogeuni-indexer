@@ -322,12 +322,12 @@ func (db *DBClient) SwapV2Exec(tx *gorm.DB, swap *models.SwapV2Info) error {
 		return err
 	}
 
-	go func() {
-		err = db.SummarySwapV2(swap)
-		if err != nil {
-			log.Error("SummaryPump error", "err", err)
-		}
-	}()
+	//go func() {
+	err = db.SummarySwapV2(tx, swap)
+	if err != nil {
+		log.Error("SummaryPump error", "err", err)
+	}
+	//}()
 
 	return nil
 }

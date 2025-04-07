@@ -3,14 +3,12 @@ package storage
 import (
 	"dogeuni-indexer/models"
 	"errors"
-	"github.com/dogecoinw/go-dogecoin/log"
 	"gorm.io/gorm"
 	"math/big"
 	"time"
 )
 
-func (db *DBClient) SummarySwapV2(swap *models.SwapV2Info) error {
-	tx := db.DB.Begin()
+func (db *DBClient) SummarySwapV2(tx *gorm.DB, swap *models.SwapV2Info) error {
 	price := 0.0
 	volume := big.NewInt(0)
 	tickId := swap.Tick0Id
@@ -83,17 +81,10 @@ func (db *DBClient) SummarySwapV2(swap *models.SwapV2Info) error {
 		return err
 	}
 
-	err = tx.Commit().Error
-	if err != nil {
-		log.Error("SummarySwapV2 tx.Commit err: %s", err.Error())
-		tx.Rollback()
-	}
-
 	return nil
 }
 
-func (db *DBClient) SummaryPump(pump *models.PumpInfo) error {
-	tx := db.DB.Begin()
+func (db *DBClient) SummaryPump(tx *gorm.DB, pump *models.PumpInfo) error {
 	price := 0.0
 	volume := big.NewInt(0)
 	tickId := pump.Tick0Id
@@ -166,17 +157,10 @@ func (db *DBClient) SummaryPump(pump *models.PumpInfo) error {
 		return err
 	}
 
-	err = tx.Commit().Error
-	if err != nil {
-		log.Error("SummaryPump tx.Commit err: %s", err.Error())
-		tx.Rollback()
-	}
-
 	return nil
 }
 
-func (db *DBClient) SummaryPumpCreate(pump *models.PumpInfo) error {
-	tx := db.DB.Begin()
+func (db *DBClient) SummaryPumpCreate(tx *gorm.DB, pump *models.PumpInfo) error {
 	price := 0.0
 	volume := big.NewInt(0)
 	tickId := pump.Tick0Id
@@ -247,12 +231,6 @@ func (db *DBClient) SummaryPumpCreate(pump *models.PumpInfo) error {
 		return err
 	}
 
-	err = tx.Commit().Error
-	if err != nil {
-		log.Error("SummaryPump tx.Commit err: %s", err.Error())
-		tx.Rollback()
-	}
-
 	return nil
 }
 
@@ -271,22 +249,23 @@ func SummaryK(tx *gorm.DB, tickId string, price float64, volume *big.Int, timeSt
 			return err
 		}
 
+		summary1 := &models.Summary{}
 		if len(summarya.TickId) != 0 {
-			summary.OpenPrice = summarya.ClosePrice
+			summary1.OpenPrice = summarya.ClosePrice
 		} else {
-			summary.OpenPrice = price
+			summary1.OpenPrice = price
 		}
 
-		summary.TickId = tickId
-		summary.ClosePrice = price
-		summary.LowestAsk = price
-		summary.HighestBid = price
-		summary.TimeStamp = timeStamp
-		summary.LastDate = time.Unix(timeStamp, 0).Format("2006-01-02 15:04:05")
-		summary.DateInterval = dateInterval
-		summary.BaseVolume = (*models.Number)(volume)
+		summary1.TickId = tickId
+		summary1.ClosePrice = price
+		summary1.LowestAsk = price
+		summary1.HighestBid = price
+		summary1.TimeStamp = timeStamp
+		summary1.LastDate = time.Unix(timeStamp, 0).Format("2006-01-02 15:04:05")
+		summary1.DateInterval = dateInterval
+		summary1.BaseVolume = (*models.Number)(volume)
 
-		err = tx.Table("swap_v2_summary").Create(summary).Error
+		err = tx.Table("swap_v2_summary").Create(summary1).Error
 		if err != nil {
 			return err
 		}

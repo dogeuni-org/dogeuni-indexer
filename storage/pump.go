@@ -152,7 +152,7 @@ func (db *DBClient) PumpDeploy(tx *gorm.DB, pump *models.PumpInfo) error {
 		pump.Amt1Out = DogeInit
 	}
 
-	err = db.SummaryPumpCreate(pump)
+	err = db.SummaryPumpCreate(tx, pump)
 	if err != nil {
 		log.Error("SummaryPump error", "err", err)
 	}
@@ -345,14 +345,14 @@ func (db *DBClient) PumpTrade(tx *gorm.DB, pump *models.PumpInfo) error {
 		}
 	}
 
-	go func() {
-		pump.Amt0 = (*models.Number)(amtin)
-		pump.Amt1 = (*models.Number)(amtout)
-		err := db.SummaryPump(pump)
-		if err != nil {
-			log.Error("SummaryPump error", "err", err)
-		}
-	}()
+	//go func() {
+	pump.Amt0 = (*models.Number)(amtin)
+	pump.Amt1 = (*models.Number)(amtout)
+	err = db.SummaryPump(tx, pump)
+	if err != nil {
+		log.Error("SummaryPump error", "err", err)
+	}
+	//}()
 
 	return nil
 }

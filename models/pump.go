@@ -48,7 +48,6 @@ type PumpLiquidity struct {
 	Tick1Id         string    `json:"tick1_id"`
 	Amt0            *Number   `json:"amt0"`
 	Amt1            *Number   `json:"amt1"`
-	ClosePrice      float64   `json:"close_price"`
 	ReservesAddress string    `json:"reserves_address"`
 	HolderAddress   string    `json:"holder_address"`
 	KingDate        LocalTime `json:"king_date"`
