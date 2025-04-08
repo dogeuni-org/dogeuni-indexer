@@ -42,3 +42,7 @@ type InviteRevert struct {
 	UpdateDate    LocalTime `json:"update_date"`
 	CreateDate    LocalTime `json:"create_date"`
 }
+
+func (InviteRevert) TableName() string {
+	return "invite_revert"
+}

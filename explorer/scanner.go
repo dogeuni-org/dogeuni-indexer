@@ -610,7 +610,11 @@ func (e *Explorer) executePairV1(swaps []*models.SwapInfo) error {
 			return fmt.Errorf("wdogeDepositSwap err: %s", err.Error())
 		}
 
-		dbtxw.Commit()
+		err = dbtxw.Commit().Error
+		if err != nil {
+			dbtxw.Rollback()
+			return fmt.Errorf("wdogeDepositSwap commit err: %s", err.Error())
+		}
 	}
 
 	dbtx := e.dbc.DB.Begin()
@@ -759,27 +763,27 @@ func (e *Explorer) executePairV2(swaps []*models.SwapV2Info) error {
 		if swap.Doge == 1 {
 
 			if swap.Op == "create" {
-				if swap.Tick0 == "WDOGE(WRAPPED-DOGE)" {
+				if swap.Tick0Id == "WDOGE(WRAPPED-DOGE)" {
 					dogeDepositAmt.Add(dogeDepositAmt, swap.Amt0.Int())
 				}
 
-				if swap.Tick1 == "WDOGE(WRAPPED-DOGE)" {
+				if swap.Tick1Id == "WDOGE(WRAPPED-DOGE)" {
 					dogeDepositAmt.Add(dogeDepositAmt, swap.Amt1.Int())
 				}
 			}
 
 			if swap.Op == "add" {
-				if swap.Tick0 == "WDOGE(WRAPPED-DOGE)" {
+				if swap.Tick0Id == "WDOGE(WRAPPED-DOGE)" {
 					dogeDepositAmt.Add(dogeDepositAmt, swap.Amt0.Int())
 				}
 
-				if swap.Tick1 == "WDOGE(WRAPPED-DOGE)" {
+				if swap.Tick1Id == "WDOGE(WRAPPED-DOGE)" {
 					dogeDepositAmt.Add(dogeDepositAmt, swap.Amt1.Int())
 				}
 			}
 
 			if swap.Op == "swap" {
-				if swap.Tick0 == "WDOGE(WRAPPED-DOGE)" {
+				if swap.Tick0Id == "WDOGE(WRAPPED-DOGE)" {
 					dogeDepositAmt.Add(dogeDepositAmt, swap.Amt0.Int())
 				}
 			}
@@ -803,7 +807,11 @@ func (e *Explorer) executePairV2(swaps []*models.SwapV2Info) error {
 			return fmt.Errorf("wdogeDepositSwap err: %s", err.Error())
 		}
 
-		dbtxw.Commit()
+		err = dbtxw.Commit().Error
+		if err != nil {
+			dbtxw.Rollback()
+			return fmt.Errorf("wdogeDepositSwap commit err: %s", err.Error())
+		}
 	}
 
 	dbtx := e.dbc.DB.Begin()
@@ -840,10 +848,10 @@ func (e *Explorer) executePairV2(swaps []*models.SwapV2Info) error {
 			}
 
 			if swap.Doge == 1 {
-				if swap.Tick0 == "WDOGE(WRAPPED-DOGE)" {
+				if swap.Tick0Id == "WDOGE(WRAPPED-DOGE)" {
 					dogeWithdrawAmt.Add(dogeWithdrawAmt, swap.Amt0Out.Int())
 				}
-				if swap.Tick1 == "WDOGE(WRAPPED-DOGE)" {
+				if swap.Tick1Id == "WDOGE(WRAPPED-DOGE)" {
 					dogeWithdrawAmt.Add(dogeWithdrawAmt, swap.Amt1Out.Int())
 				}
 			}
@@ -856,7 +864,7 @@ func (e *Explorer) executePairV2(swaps []*models.SwapV2Info) error {
 			}
 
 			if swap.Doge == 1 {
-				if swap.Tick1 == "WDOGE(WRAPPED-DOGE)" {
+				if swap.Tick1Id == "WDOGE(WRAPPED-DOGE)" {
 					dogeWithdrawAmt.Add(dogeWithdrawAmt, swap.Amt1Out.Int())
 				}
 			}
