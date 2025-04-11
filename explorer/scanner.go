@@ -762,7 +762,17 @@ func (e *Explorer) executePairV2(swaps []*models.SwapV2Info) error {
 	for _, swap := range swaps {
 		if swap.Doge == 1 {
 
-			if swap.Op == "create" {
+			if swap.Op == "create" || swap.Op == "add" {
+
+				swapl := &models.SwapV2Liquidity{}
+				err := e.dbc.DB.Where("pair_id = ?", swap.PairId).First(swapl).Error
+				if err != nil {
+					return fmt.Errorf("FindSwapLiquidity error: %v", err)
+				}
+
+				swap.Tick0Id = swapl.Tick0Id
+				swap.Tick1Id = swapl.Tick1Id
+
 				if swap.Tick0Id == "WDOGE(WRAPPED-DOGE)" {
 					dogeDepositAmt.Add(dogeDepositAmt, swap.Amt0.Int())
 				}
@@ -771,17 +781,6 @@ func (e *Explorer) executePairV2(swaps []*models.SwapV2Info) error {
 					dogeDepositAmt.Add(dogeDepositAmt, swap.Amt1.Int())
 				}
 			}
-
-			if swap.Op == "add" {
-				if swap.Tick0Id == "WDOGE(WRAPPED-DOGE)" {
-					dogeDepositAmt.Add(dogeDepositAmt, swap.Amt0.Int())
-				}
-
-				if swap.Tick1Id == "WDOGE(WRAPPED-DOGE)" {
-					dogeDepositAmt.Add(dogeDepositAmt, swap.Amt1.Int())
-				}
-			}
-
 			if swap.Op == "swap" {
 				if swap.Tick0Id == "WDOGE(WRAPPED-DOGE)" {
 					dogeDepositAmt.Add(dogeDepositAmt, swap.Amt0.Int())

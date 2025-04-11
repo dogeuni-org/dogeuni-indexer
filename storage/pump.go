@@ -20,9 +20,9 @@ const (
 var (
 	MemeMax             = models.NewNumber(100000000000000000)
 	DogeInit            = models.NewNumber(300000000000)
-	DogeMax             = models.NewNumber(3000000000000)
+	DogeMax             = models.NewNumber(10000000000000)
 	DogeKingMax         = models.NewNumber(1000000000000)
-	PumpFinishFee       = models.NewNumber(50000000000)
+	PumpFinishFee       = models.NewNumber(100000000000)
 	PumpCreateHolderFee = models.NewNumber(10000000000)
 )
 
@@ -508,7 +508,7 @@ func (db *DBClient) FindPumpPriceAll() ([]*SwapV2Price, int64, error) {
 	liquidityMap := make(map[string]*big.Float)
 	for _, v := range liquidityAll {
 
-		if v.Amt1.Int().Cmp(DogeMax.Int()) >= 0 {
+		if v.Amt1.Int().Cmp(big.NewInt(10300000000000)) >= 0 {
 			continue
 		}
 
