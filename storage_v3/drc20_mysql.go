@@ -790,7 +790,7 @@ SELECT ci.order_id,
     ci.create_date,
        ci.order_status,
        ci.to_address,
-       di.tx_hash
+       IFNULL(di.tx_hash, '') AS tx_hash
 FROM drc20_info ci left join drc20_collect di on ci.tick = di.tick 
 `
 	where := "where"
