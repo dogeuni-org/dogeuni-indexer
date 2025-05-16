@@ -221,7 +221,7 @@ func (db *DBClient) PumpTrade(tx *gorm.DB, pump *models.PumpInfo) error {
 		}
 
 		if len(inviter.InviteAddress) > 0 {
-			amtfee1 := new(big.Int).Div(amtfee0, big.NewInt(5))
+			amtfee1 := new(big.Int).Div(amtfee0, big.NewInt(2))
 			err = db.TransferDrc20(tx, pump.Tick0Id, TxFeeAddress, inviter.InviteAddress, amtfee1, pump.TxHash, pump.BlockNumber, false)
 			if err != nil {
 				return err
@@ -262,7 +262,7 @@ func (db *DBClient) PumpTrade(tx *gorm.DB, pump *models.PumpInfo) error {
 		amtout = new(big.Int).Sub(amtout, amtfee1)
 
 		if len(inviter.InviteAddress) > 0 {
-			amtfee2 := new(big.Int).Div(amtfee1, big.NewInt(5))
+			amtfee2 := new(big.Int).Div(amtfee1, big.NewInt(2))
 			err = db.TransferDrc20(tx, pump.Tick1Id, TxFeeAddress, inviter.InviteAddress, amtfee2, pump.TxHash, pump.BlockNumber, false)
 			if err != nil {
 				return err

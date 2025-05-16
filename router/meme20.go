@@ -114,13 +114,18 @@ func (r *Meme20Router) History(c *gin.Context) {
 	infos := make([]*models.Meme20Revert, 0)
 	total := int64(0)
 
-	subQuery := r.dbc.DB.Model(&models.Meme20Revert{})
+	subQuery := r.dbc.DB.Table("meme20_revert as me").Select("me.*, mc.tick, mc.name").
+		Joins("LEFT JOIN meme20_collect AS mc ON mc.tick_id = me.tick_id")
 
 	if params.Address != "" {
-		subQuery = subQuery.Where("from_address = ? OR to_address = ? ", params.Address, params.Address)
+		subQuery = subQuery.Where("me.from_address = ? OR me.to_address = ? ", params.Address, params.Address)
 	}
 
-	err := subQuery.Where(filter).Count(&total).Order("id desc").Limit(params.Limit).Offset(params.OffSet).Find(&infos).Error
+	if params.TickId != "" {
+		subQuery = subQuery.Where("me.tick_id = ?", params.TickId)
+	}
+
+	err := subQuery.Where(filter).Count(&total).Order("me.id desc").Limit(params.Limit).Offset(params.OffSet).Find(&infos).Error
 	if err != nil {
 		result := &utils.HttpResult{}
 		result.Code = 500
@@ -179,6 +184,7 @@ func (r *Meme20Router) CollectAddress(c *gin.Context) {
 
 	total := int64(0)
 	err := subQuery.
+		Where("mca.amt != '0'").
 		Count(&total).
 		Order("CAST(mca.amt AS DECIMAL(64,0)) DESC").
 		Limit(params.Limit).
@@ -223,7 +229,7 @@ func (r *Meme20Router) Collect(c *gin.Context) {
 			di.holder_address,
 	        di.update_date, 
 			di.create_date,
-			(select count(id) from meme20_collect_address as mca where mca.tick_id = di.tick_id) AS holders,
+			(select count(id) from meme20_collect_address as mca where mca.tick_id = di.tick_id and mca.amt != '0') AS holders,
             di.logo, di.reserve, di.tag, di.description, di.twitter, di.telegram, di.discord, di.website, di.youtube, di.tiktok, di.is_check`)
 
 	if params.TickId != "" {

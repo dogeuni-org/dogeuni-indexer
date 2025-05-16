@@ -157,6 +157,7 @@ func (db *DBClient) SwapV2Add(tx *gorm.DB, swap *models.SwapV2Info) error {
 
 	swap.Amt0Out = (*models.Number)(amt0Out)
 	swap.Amt1Out = (*models.Number)(amt1Out)
+	swap.Liquidity = (*models.Number)(liquidity)
 
 	if len(swapl.Tick0Id) < MEMETICKID_LENGTH {
 		err = db.TransferDrc20(tx, swapl.Tick0Id, swap.HolderAddress, reservesAddress.String(), swap.Amt0.Int(), swap.TxHash, swap.BlockNumber, false)

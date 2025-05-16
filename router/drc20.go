@@ -176,6 +176,8 @@ func (r *Drc20Router) CollectAddress(c *gin.Context) {
 			dca.create_date`).
 		Joins("LEFT JOIN drc20_collect AS dc ON dca.tick = dc.tick")
 
+	subQuery.Where("dca.amt_sum != '0'")
+
 	if params.Tick != "" {
 		subQuery = subQuery.Where("dca.tick = ?", params.Tick)
 	}
@@ -239,7 +241,7 @@ func (r *Drc20Router) Collect(c *gin.Context) {
 	results := make([]*models.Drc20CollectRouter, 0)
 	subQuery := r.dbc.DB.Table("drc20_collect AS di").
 		Select(`di.tick, di.amt_sum as mint_amt, di.max_ as max_amt, di.lim_, di.transactions, di.holder_address as deploy_by,
-	        di.update_date AS last_mint_time, (select count(*) from drc20_collect_address where tick = di.tick) AS holders,
+	        di.update_date AS last_mint_time, (select count(*) from drc20_collect_address where tick = di.tick and amt_sum != '0') AS holders,
 			di.create_date AS deploy_time, di.tx_hash as inscription, di.logo, di.introduction, di.white_paper, di.official, di.telegram, di.discorad, di.twitter, di.facebook, di.github,di.is_check`)
 
 	if params.Tick != "" {

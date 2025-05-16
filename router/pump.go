@@ -86,6 +86,8 @@ func (r *PumpRouter) MergeOrder(c *gin.Context) {
 	params := &struct {
 		TickId        string `json:"tick_id"`
 		HolderAddress string `json:"holder_address"`
+		OrderStatus   int    `json:"order_status"`
+		BlockNumber   int64  `json:"block_number"`
 		Limit         int    `json:"limit"`
 		OffSet        int    `json:"offset"`
 	}{
@@ -115,6 +117,18 @@ func (r *PumpRouter) MergeOrder(c *gin.Context) {
 		swapQuery = swapQuery.Where("holder_address = ?", params.HolderAddress)
 	}
 
+	switch params.OrderStatus {
+	case 1:
+		swapQuery = swapQuery.Where("order_status = 1")
+	case 2:
+		swapQuery = swapQuery.Where("order_status = 0")
+	}
+
+	// Add block number filter if provided
+	if params.BlockNumber > 0 {
+		swapQuery = swapQuery.Where("block_number = ?", params.BlockNumber)
+	}
+
 	// Second query (pump_info)
 	pumpQuery := r.dbc.DB.Table("pump_info").
 		Select("'pump' as p, op, tick0_id, tick0, tick1_id, tick1, amt0, amt1, amt0_out, amt1_out, tx_hash, holder_address, order_status, create_date")
@@ -125,6 +139,18 @@ func (r *PumpRouter) MergeOrder(c *gin.Context) {
 
 	if params.HolderAddress != "" {
 		pumpQuery = pumpQuery.Where("holder_address = ?", params.HolderAddress)
+	}
+
+	switch params.OrderStatus {
+	case 1:
+		pumpQuery = pumpQuery.Where("order_status = 1")
+	case 2:
+		pumpQuery = pumpQuery.Where("order_status = 0")
+	}
+
+	// Add block number filter if provided
+	if params.BlockNumber > 0 {
+		pumpQuery = pumpQuery.Where("block_number = ?", params.BlockNumber)
 	}
 
 	// Combine queries with UNION and apply ordering and limits
@@ -255,17 +281,27 @@ func (r *PumpRouter) Board(c *gin.Context) {
 		return
 	}
 
+	if params.Limit > 100 {
+		params.Limit = 100
+	}
+
 	//OrderBy
 	// 1. 交易量
 	// 2. 时间排序
 	// 3. 价格排序
 	infos := make([]*PumpBoard, 0)
 	total := int64(0)
+	startDate := time.Now()
+	timeStamp := time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, startDate.Location()).Unix()
+
 	subQuery := r.dbc.DB.Table("pump_liquidity as pl").
-		Select("mc.tick, mc.tick_id, mc.logo, mc.reserve, mc.tag, mc.twitter, mc.telegram, mc.discord, mc.website, mc.youtube, mc.tiktok, mc.name, mc.description, mc.holder_address, mc.transactions, pl.amt0, pl.amt1, pl.amt0/pl.amt1 as price, pl.holder_address, pl.king_date, pl.create_date, uca.profile_photo, uca.user_name, uca.bio, " +
-			"(SELECT COUNT(id) FROM tg_bot.user_chat WHERE tg_bot.user_chat.tick_id = mc.tick_id) AS replies").
+		Select("mc.tick, mc.tick_id, mc.logo, mc.reserve, mc.tag, mc.twitter, mc.telegram, mc.discord, mc.website, mc.youtube, mc.tiktok, mc.name, mc.description, mc.holder_address, mc.transactions, svs.price_change, svs.base_volume, pl.amt0, pl.amt1, pl.amt0/pl.amt1 as price, pl.holder_address, pl.king_date, pl.create_date, sl.amt0 as swap_amt0, sl.amt1 as swap_amt1,  uca.profile_photo, uca.user_name, uca.bio, "+
+			"(SELECT COUNT(id) FROM tg_bot.user_chat WHERE tg_bot.user_chat.tick_id = mc.tick_id) AS replies, "+
+			"(SELECT COUNT(id) FROM meme20_collect_address WHERE tick_id = pl.tick0_id and amt != '0') AS holders").
 		Joins("left join meme20_collect as mc on pl.tick0_id = mc.tick_id").
-		Joins("left join (select * from tg_bot.account where id in (select max(id) from tg_bot.account group by address)) as uca on uca.address = mc.holder_address")
+		Joins("left join swap_v2_liquidity as sl on pl.tick0_id = sl.tick0_id and sl.tick1_id = 'WDOGE(WRAPPED-DOGE)'").
+		Joins("left join (SELECT * from tg_bot.account where id in (SELECT max(id) from tg_bot.account group by address)) as uca on uca.address = mc.holder_address").
+		Joins("left join (WITH RankedRecords AS (SELECT tick_id, COALESCE(((close_price - open_price) / open_price) * 100, 0) AS price_change, base_volume, date_interval, ROW_NUMBER() OVER (PARTITION BY tick_id ORDER BY id DESC) as rn FROM swap_v2_summary where date_interval = '1d' and last_date = ?) SELECT * FROM RankedRecords WHERE rn = 1) as svs on svs.tick_id = pl.tick0_id", time.Unix(timeStamp, 0).Format("2006-01-02 15:04:05"))
 
 	if params.SearchKey != "" {
 		subQuery = subQuery.Where("mc.name like ? or mc.tick_id like ? or mc.tick like ?", "%"+params.SearchKey+"%", "%"+params.SearchKey+"%", "%"+params.SearchKey+"%")
@@ -289,9 +325,17 @@ func (r *PumpRouter) Board(c *gin.Context) {
 
 	if params.Sort == "price" {
 		if params.SortBy == "desc" {
-			subQuery = subQuery.Order("price asc")
-		} else {
 			subQuery = subQuery.Order("price desc")
+		} else {
+			subQuery = subQuery.Order("price asc")
+		}
+	}
+
+	if params.Sort == "price_change" {
+		if params.SortBy == "desc" {
+			subQuery = subQuery.Order("svs.price_change desc")
+		} else {
+			subQuery = subQuery.Order("svs.price_change asc")
 		}
 	}
 
@@ -556,6 +600,10 @@ func (r *PumpRouter) King(c *gin.Context) {
 		Tick          string           `json:"tick"`
 		Logo          string           `json:"logo"`
 		Name          string           `json:"name"`
+		Amt0          *models.Number   `json:"amt0"`
+		Amt1          *models.Number   `json:"amt1"`
+		SwapAmt0      *models.Number   `json:"swap_amt0"`
+		SwapAmt1      *models.Number   `json:"swap_amt1"`
 		HolderAddress string           `json:"holder_address"`
 		Transactions  int64            `json:"transactions"`
 		Replies       int64            `json:"replies"`
@@ -566,9 +614,10 @@ func (r *PumpRouter) King(c *gin.Context) {
 
 	king := make([]King, 0)
 	err := r.dbc.DB.Table("pump_liquidity as pl").
-		Select("mc.tick_id, mc.tick, mc.logo, mc.name, mc.holder_address, mc.transactions, pl.king_date, pl.update_date, pl.create_date, " +
+		Select("mc.tick_id, mc.tick, mc.logo, mc.name, mc.holder_address, mc.transactions, pl.king_date, pl.update_date, pl.create_date, pl.amt0, pl.amt1, sl.amt0 as swap_amt0, sl.amt1 as swap_amt1," +
 			"(SELECT COUNT(id) FROM tg_bot.user_chat WHERE tg_bot.user_chat.tick_id = mc.tick_id) AS replies").
 		Joins("left join meme20_collect as mc on pl.tick0_id = mc.tick_id").
+		Joins("left join swap_v2_liquidity as sl on pl.tick0_id = sl.tick0_id and sl.tick1_id = 'WDOGE(WRAPPED-DOGE)'").
 		Order("pl.king_date desc").Limit(params.Limit).Offset(params.OffSet).Find(&king).Error
 
 	if err != nil {

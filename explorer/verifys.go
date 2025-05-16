@@ -285,7 +285,7 @@ func (v *Verifys) verifySwapExec(tx *gorm.DB, swap *models.SwapInfo) error {
 	amtout = new(big.Int).Div(amtout, new(big.Int).Add(amtMap[swap.Tick0], amtin))
 
 	if amtout.Cmp(swap.Amt1Min.Int()) < 0 {
-		return fmt.Errorf("the minimum output less than the limit")
+		return fmt.Errorf("the minimum output less than the limit.")
 	}
 
 	cardA0 := &models.Drc20CollectAddress{}
@@ -1002,6 +1002,26 @@ func (v *Verifys) verifyMeme20Transfer(meme20 *models.Meme20Info) error {
 		return fmt.Errorf("the contract does not exist")
 	}
 
+	infosp := make([]*models.PumpInfo, 0)
+	err = v.dbc.DB.Where("block_number = ? and holder_address = ? and op='trade'  and order_status = 0", meme20.BlockNumber, meme20.HolderAddress).Find(&infosp).Error
+	if err != nil {
+		return fmt.Errorf("the contract does not exist")
+	}
+
+	if len(infosp) != 0 {
+		return fmt.Errorf("the contract has been deployed")
+	}
+
+	infoss := make([]*models.SwapV2Info, 0)
+	err = v.dbc.DB.Where("block_number = ? and holder_address = ? and op = 'swap' and order_status = 0 ", meme20.BlockNumber, meme20.HolderAddress).Find(&infoss).Error
+	if err != nil {
+		return fmt.Errorf("the contract does not exist")
+	}
+
+	if len(infoss) != 0 {
+		return fmt.Errorf("the contract has been deployed")
+	}
+
 	if meme20.Amt.Cmp(meme1.Amt) > 0 {
 		return fmt.Errorf("the amount of tokens exceeds the balance")
 	}
@@ -1212,6 +1232,16 @@ func (v *Verifys) verifySwapV2Exec(tx *gorm.DB, swap *models.SwapV2Info) error {
 		return fmt.Errorf("the contract does not exist err %s", err.Error())
 	}
 
+	infos := make([]*models.SwapV2Info, 0)
+	err = tx.Where("block_number = ? and holder_address = ? and op = 'swap' and order_status = 0", swap.BlockNumber, swap.HolderAddress).Find(&infos).Error
+	if err != nil {
+		return fmt.Errorf("the contract does not exist")
+	}
+
+	if len(infos) != 0 {
+		return fmt.Errorf("the contract has been deployed")
+	}
+
 	if swap.Tick0Id == swapLiquidity.Tick0Id {
 		swap.Tick0 = swapLiquidity.Tick0
 		swap.Tick1 = swapLiquidity.Tick1
@@ -1317,6 +1347,16 @@ func (v *Verifys) verifyPumpTrade(tx *gorm.DB, pump *models.PumpInfo) error {
 
 	if pumpl.Amt1.Int().Cmp(DogeMax) >= 0 {
 		return fmt.Errorf("pump inner plate has been completed")
+	}
+
+	infos := make([]*models.PumpInfo, 0)
+	err = tx.Where("block_number = ? and holder_address = ? and op='trade' and order_status = 0", pump.BlockNumber, pump.HolderAddress).Find(&infos).Error
+	if err != nil {
+		return fmt.Errorf("the contract does not exist")
+	}
+
+	if len(infos) != 0 {
+		return fmt.Errorf("the contract has been deployed")
 	}
 
 	if pump.Tick0Id == pumpl.Tick0Id {
