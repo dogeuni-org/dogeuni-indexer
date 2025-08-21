@@ -45,6 +45,12 @@ type ExplorerConfig struct {
 	InitForkData bool  `json:"init_fork_data"`
 }
 
+type CardityConfig struct {
+    Enable       bool   `json:"enable"`
+    RuntimePath  string `json:"runtime_path"`
+    AbiRegistry  string `json:"abi_registry"`
+}
+
 type HttpResult struct {
 	Code  int         `json:"code"`
 	Msg   string      `json:"msg"`

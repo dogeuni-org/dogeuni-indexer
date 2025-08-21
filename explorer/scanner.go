@@ -7,14 +7,15 @@ import (
 	"dogeuni-indexer/storage"
 	"errors"
 	"fmt"
+	"math/big"
+	"sync"
+	"time"
+
 	"github.com/dogecoinw/doged/chaincfg/chainhash"
 	"github.com/dogecoinw/doged/rpcclient"
 	"github.com/dogecoinw/go-dogecoin/log"
 	"github.com/google/uuid"
 	shell "github.com/ipfs/go-ipfs-api"
-	"math/big"
-	"sync"
-	"time"
 )
 
 const (
@@ -313,6 +314,17 @@ func (e *Explorer) scan() error {
 					continue
 				}
 
+			case "cardity":
+				// try parse pushedData as raw json string
+				if len(pushedData) == 0 {
+					log.Error("scanning", "cardity", "empty payload", "txhash", txv.Txid)
+					continue
+				}
+				raw := string(pushedData)
+				if err := e.executeCardity(txv.Txid, txv.BlockHash, e.currentHeight, raw); err != nil {
+					log.Error("scanning", "cardityExecute", err, "txhash", txv.Txid)
+					continue
+				}
 			default:
 				log.Error("scanning", "op", "not found", "txhash", txv.Txid)
 			}
@@ -345,6 +357,7 @@ func (e *Explorer) executeDrc20(drc20 *models.Drc20Info) error {
 		if err != nil {
 			return fmt.Errorf("drc20Deploy err: %s", err.Error())
 		}
+		e.mirrorCardityDrc20(drc20)
 	}
 
 	if drc20.Op == "mint" {
@@ -352,6 +365,7 @@ func (e *Explorer) executeDrc20(drc20 *models.Drc20Info) error {
 		if err != nil {
 			return fmt.Errorf("drc20Mint err: %s", err.Error())
 		}
+		e.mirrorCardityDrc20(drc20)
 	}
 
 	if drc20.Op == "transfer" {
@@ -359,6 +373,7 @@ func (e *Explorer) executeDrc20(drc20 *models.Drc20Info) error {
 		if err != nil {
 			return fmt.Errorf("drc20Transfer err: %s", err.Error())
 		}
+		e.mirrorCardityDrc20(drc20)
 	}
 
 	return nil
@@ -742,6 +757,7 @@ func (e *Explorer) executeMeme20(meme20 *models.Meme20Info) error {
 		if err != nil {
 			return fmt.Errorf("memeDeploy err: %s", err.Error())
 		}
+		e.mirrorCardityMeme20(meme20)
 	}
 
 	if meme20.Op == "transfer" {
@@ -749,6 +765,7 @@ func (e *Explorer) executeMeme20(meme20 *models.Meme20Info) error {
 		if err != nil {
 			return fmt.Errorf("meme20Transfer err: %s", err.Error())
 		}
+		e.mirrorCardityMeme20(meme20)
 	}
 
 	return nil

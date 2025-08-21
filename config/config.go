@@ -15,6 +15,7 @@ type Config struct {
 	Mysql      utils.MysqlConfig    `json:"mysql"`
 	Chain      utils.ChainConfig    `json:"chain"`
 	Explorer   utils.ExplorerConfig `json:"explorer"`
+    Cardity    utils.CardityConfig  `json:"cardity"`
 	Ipfs       string               `json:"ipfs"`
 	DebugLevel int                  `json:"debug_level"`
 }

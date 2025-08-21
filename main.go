@@ -8,15 +8,16 @@ import (
 	"dogeuni-indexer/router_v3"
 	"dogeuni-indexer/storage"
 	"dogeuni-indexer/storage_v3"
-	"github.com/dogecoinw/doged/rpcclient"
-	"github.com/dogecoinw/go-dogecoin/log"
-	"github.com/gin-gonic/gin"
-	shell "github.com/ipfs/go-ipfs-api"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
+
+	"github.com/dogecoinw/doged/rpcclient"
+	"github.com/dogecoinw/go-dogecoin/log"
+	"github.com/gin-gonic/gin"
+	shell "github.com/ipfs/go-ipfs-api"
 )
 
 var (
@@ -43,6 +44,9 @@ func main() {
 	} else {
 		dbClient = storage.NewMysqlClient(cfg.Mysql)
 	}
+
+	// run automigrations for Cardity tables
+	_ = dbClient.AutoMigrateCardity()
 
 	connCfg := &rpcclient.ConnConfig{
 		Host:         cfg.Chain.Rpc,
@@ -268,6 +272,14 @@ func main() {
 			v4.POST("/invite/collect", inviteRouter.Collect)
 			v4.POST("/invite/pump-reword", inviteRouter.PumpReward)
 			v4.POST("/invite/pump-reword-total", inviteRouter.PumpRewardTotal)
+
+			// cardity (generic contract index views)
+			cardityRouter := router.NewCardityRouter(dbClient)
+			v4.POST("/cardity/contracts", cardityRouter.Contracts)
+			v4.POST("/cardity/invocations", cardityRouter.Invocations)
+			v4.POST("/cardity/events", cardityRouter.Events)
+			v4.POST("/cardity/packages", cardityRouter.Packages)
+			v4.POST("/cardity/modules", cardityRouter.Modules)
 		}
 
 		err := grt.Run(cfg.HttpServer.Server)
