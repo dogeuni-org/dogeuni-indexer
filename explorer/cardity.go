@@ -7,9 +7,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/dogecoinw/doged/chaincfg/chainhash"
 	"strings"
 	"time"
+
+	"github.com/dogecoinw/doged/chaincfg/chainhash"
 )
 
 func truncate(s string, n int) string {
@@ -194,16 +195,18 @@ func (e *Explorer) executeCardity(txhash, blockHash string, height int64, rawJSO
 			total = *env.Total
 		}
 		part := &models.CardityBundlePart{
-			BundleId:   env.BundleId,
-			Idx:        idx,
-			Total:      total,
-			PackageId:  env.PackageId,
-			Version:    env.Version,
-			ModuleName: env.ModuleName,
-			AbiJSON:    string(env.Abi),
-			CarcB64:    env.CarcB64,
-			TxHash:     txhash,
-			CreateDate: now,
+			BundleId:    env.BundleId,
+			Idx:         idx,
+			Total:       total,
+			PackageId:   env.PackageId,
+			Version:     env.Version,
+			ModuleName:  env.ModuleName,
+			AbiJSON:     string(env.Abi),
+			CarcB64:     env.CarcB64,
+			TxHash:      txhash,
+			BlockHash:   blockHash,
+			BlockNumber: height,
+			CreateDate:  now,
 		}
 		if err := e.dbc.SaveBundlePart(part); err != nil {
 			return fmt.Errorf("SaveBundlePart err: %v", err)
@@ -230,6 +233,8 @@ func (e *Explorer) executeCardity(txhash, blockHash string, height int64, rawJSO
 						CarcSHA256:   sha,
 						Size:         size,
 						DeployTxHash: p.TxHash,
+						BlockHash:    p.BlockHash,
+						BlockNumber:  p.BlockNumber,
 						CreateDate:   p.CreateDate,
 					})
 				}

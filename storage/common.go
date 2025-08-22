@@ -29,13 +29,65 @@ func (db *DBClient) ScheduledTasks(height int64) error {
 		return err
 	}
 
+	// assemble completed Cardity bundles when all parts are present
+	if err := db.CardityAssembleBundles(tx); err != nil {
+		tx.Rollback()
+		return err
+	}
+
 	err = tx.Commit().Error
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
 
-	log.Info("explorer", "StakeUpdatePool time", time.Now().Sub(s).String())
+	log.Info("explorer", "StakeUpdatePool time", time.Since(s).String())
+	return nil
+}
+
+// CardityAssembleBundles collects bundle parts that reached completeness and persists modules/packages in a single tx
+func (db *DBClient) CardityAssembleBundles(tx *gorm.DB) error {
+	// find bundle_ids whose count(idx) == total
+	type agg struct{ BundleId string; Total int64; Parts int64 }
+	rows := make([]*agg, 0)
+	if err := tx.
+		Model(&models.CardityBundlePart{}).
+		Select("bundle_id, MIN(total) as total, COUNT(*) as parts").
+		Group("bundle_id").
+		Having("parts > 0 and total > 0 and parts = total").
+		Find(&rows).Error; err != nil {
+		return err
+	}
+	for _, r := range rows {
+		parts := make([]*models.CardityBundlePart, 0)
+		if err := tx.Where("bundle_id = ?", r.BundleId).Order("idx asc").Find(&parts).Error; err != nil {
+			return err
+		}
+		for _, p := range parts {
+			var sha string
+			var size int64
+			if p.CarcB64 != "" {
+				// size/sha will be recomputed by the runtime if needed; keep storage simple here
+			}
+			if err := tx.Save(&models.CardityModule{
+				PackageId:    p.PackageId,
+				Name:         p.ModuleName,
+				AbiJSON:      p.AbiJSON,
+				CarcB64:      p.CarcB64,
+				CarcSHA256:   sha,
+				Size:         size,
+				DeployTxHash: p.TxHash,
+				BlockHash:    p.BlockHash,
+				BlockNumber:  p.BlockNumber,
+				CreateDate:   p.CreateDate,
+			}).Error; err != nil {
+			return err
+		}
+		}
+		if err := tx.Save(&models.CardityPackage{PackageId: parts[0].PackageId, Version: parts[0].Version}).Error; err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

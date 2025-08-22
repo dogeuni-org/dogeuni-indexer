@@ -2,6 +2,7 @@ package storage
 
 import (
 	"dogeuni-indexer/models"
+	"gorm.io/gorm/clause"
 )
 
 // SaveCardityContract persists a CardityContract. If the contract_id already exists,
@@ -12,7 +13,8 @@ func (db *DBClient) SaveCardityContract(contract *models.CardityContract) error 
 
 // SaveCardityInvocation stores a method invocation log
 func (db *DBClient) SaveCardityInvocation(inv *models.CardityInvocationLog) error {
-	return db.DB.Create(inv).Error
+	// idempotent on unique tx_hash
+	return db.DB.Clauses(clause.OnConflict{DoNothing: true}).Create(inv).Error
 }
 
 // SaveCardityEvents stores multiple event logs in batch
@@ -33,7 +35,11 @@ func (db *DBClient) SaveCardityModule(mod *models.CardityModule) error {
 }
 
 func (db *DBClient) SaveBundlePart(part *models.CardityBundlePart) error {
-	return db.DB.Create(part).Error
+	// upsert per (bundle_id, idx)
+	return db.DB.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "bundle_id"}, {Name: "idx"}},
+		DoUpdates: clause.Assignments(map[string]interface{}{"carc_b64": part.CarcB64, "abi_json": part.AbiJSON, "package_id": part.PackageId, "version": part.Version, "module_name": part.ModuleName, "tx_hash": part.TxHash, "block_hash": part.BlockHash, "block_number": part.BlockNumber, "create_date": part.CreateDate}),
+	}).Create(part).Error
 }
 
 func (db *DBClient) FindBundleParts(bundleId string) ([]*models.CardityBundlePart, error) {

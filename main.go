@@ -8,16 +8,14 @@ import (
 	"dogeuni-indexer/router_v3"
 	"dogeuni-indexer/storage"
 	"dogeuni-indexer/storage_v3"
-	_ "net/http/pprof"
-	"os"
-	"os/signal"
-	"sync"
-	"syscall"
-
 	"github.com/dogecoinw/doged/rpcclient"
 	"github.com/dogecoinw/go-dogecoin/log"
 	"github.com/gin-gonic/gin"
 	shell "github.com/ipfs/go-ipfs-api"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 )
 
 var (
@@ -280,6 +278,9 @@ func main() {
 			v4.POST("/cardity/events", cardityRouter.Events)
 			v4.POST("/cardity/packages", cardityRouter.Packages)
 			v4.POST("/cardity/modules", cardityRouter.Modules)
+			v4.GET("/cardity/contract/:id", cardityRouter.Contract)
+			v4.GET("/cardity/invocations/:contractId", cardityRouter.InvocationsByContract)
+			v4.GET("/cardity/modules/:packageId", cardityRouter.ModulesByPackage)
 		}
 
 		err := grt.Run(cfg.HttpServer.Server)

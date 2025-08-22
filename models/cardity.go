@@ -32,7 +32,7 @@ type CardityInvocationLog struct {
 	ArgsJSON    string `json:"args_json" gorm:"type:text"`
 	ArgsText    string `json:"args_text" gorm:"type:varchar(256);index"`
 	FromAddress string `json:"from_address" gorm:"index"`
-	TxHash      string `json:"tx_hash" gorm:"index,uniqueIndex:uniq_cardi_inv"`
+	TxHash      string `json:"tx_hash" gorm:"index,uniqueIndex:uniq_cardi_inv,uniqueIndex"`
 	BlockHash   string `json:"block_hash"`
 	BlockNumber int64  `json:"block_number" gorm:"index"`
 	CreateDate  int64  `json:"create_date" gorm:"index"`
@@ -102,7 +102,7 @@ type CardityModule struct {
 	Name         string `json:"name" gorm:"index"`
 	AbiJSON      string `json:"abi_json" gorm:"type:text"`
 	CarcB64      string `json:"carc_b64" gorm:"type:text"`
-	CarcSHA256   string `json:"carc_sha256" gorm:"index"`
+	CarcSHA256   string `json:"carc_sha256" gorm:"uniqueIndex"`
 	Size         int64  `json:"size"`
 	DeployTxHash string `json:"deploy_tx_hash" gorm:"index"`
 	BlockHash    string `json:"block_hash"`
@@ -122,5 +122,7 @@ type CardityBundlePart struct {
 	AbiJSON    string `json:"abi_json" gorm:"type:text"`
 	CarcB64    string `json:"carc_b64" gorm:"type:text"`
 	TxHash     string `json:"tx_hash" gorm:"index"`
+	BlockHash  string `json:"block_hash"`
+	BlockNumber int64 `json:"block_number" gorm:"index"`
 	CreateDate int64  `json:"create_date" gorm:"index"`
 }
