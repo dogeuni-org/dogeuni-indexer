@@ -7,10 +7,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/dogecoinw/doged/chaincfg/chainhash"
+	"github.com/dogecoinw/go-dogecoin/log"
 	"strings"
 	"time"
-
-	"github.com/dogecoinw/doged/chaincfg/chainhash"
+	"unicode/utf8"
 )
 
 func truncate(s string, n int) string {
@@ -66,6 +67,16 @@ type cardityEnvelope struct {
 }
 
 func (e *Explorer) cardityDecode(rawJSON string) (*cardityEnvelope, error) {
+	// 4KB guard and UTF-8 validation
+	if len(rawJSON) > 4*1024 {
+		log.Warn("cardity", "decode", "payload too large", "len", len(rawJSON))
+		return nil, fmt.Errorf("payload too large")
+	}
+	if !utf8.ValidString(rawJSON) {
+		log.Warn("cardity", "decode", "invalid utf8")
+		return nil, fmt.Errorf("invalid utf8")
+	}
+
 	// try direct JSON first
 	b := []byte(strings.TrimSpace(rawJSON))
 	env := &cardityEnvelope{}
@@ -141,6 +152,8 @@ func (e *Explorer) executeCardity(txhash, blockHash string, height int64, rawJSO
 				if hasCRAC(b) {
 					sha = fmt.Sprintf("%x", sha256.Sum256(b))
 					size = int64(len(b))
+				} else {
+					log.Warn("cardity", "deploy", "invalid carc magic", "tx", txhash)
 				}
 			}
 		} else if carcHex != "" {
@@ -148,6 +161,8 @@ func (e *Explorer) executeCardity(txhash, blockHash string, height int64, rawJSO
 				if hasCRAC(b) {
 					sha = fmt.Sprintf("%x", sha256.Sum256(b))
 					size = int64(len(b))
+				} else {
+					log.Warn("cardity", "deploy", "invalid carc magic", "tx", txhash)
 				}
 			}
 		}
@@ -222,6 +237,8 @@ func (e *Explorer) executeCardity(txhash, blockHash string, height int64, rawJSO
 							if hasCRAC(b) {
 								sha = fmt.Sprintf("%x", sha256.Sum256(b))
 								size = int64(len(b))
+							} else {
+								log.Warn("cardity", "deploy_part", "invalid carc magic", "tx", p.TxHash)
 							}
 						}
 					}
