@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"dogeuni-indexer/models"
 	"dogeuni-indexer/utils"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/dogecoinw/doged/btcjson"
@@ -11,6 +12,7 @@ import (
 	"github.com/dogecoinw/go-dogecoin/log"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"strings"
 	"time"
 )
 
@@ -28,7 +30,7 @@ func (e *Explorer) fileDecode(tx *btcjson.TxRawResult, number int64) (*models.Fi
 
 	file, err := utils.ConvertFile(inscription)
 	if err != nil {
-		return nil, fmt.Errorf("ConvertNft err: %s", err.Error())
+		return nil, fmt.Errorf("convertNft err: %s", err.Error())
 	}
 
 	file.OrderId = uuid.New().String()
@@ -45,14 +47,14 @@ func (e *Explorer) fileDecode(tx *btcjson.TxRawResult, number int64) (*models.Fi
 		file.FileId = tx.Hash
 		file.HolderAddress = tx.Vout[0].ScriptPubKey.Addresses[0]
 		if tx.Vout[0].Value != 0.001 {
-			return nil, fmt.Errorf("The amount of tokens exceeds the 0.0001")
+			return nil, fmt.Errorf("the amount of tokens exceeds the 0.0001")
 		}
 	}
 
 	txHash0, _ := chainhash.NewHashFromStr(tx.Vin[0].Txid)
 	txRawResult0, err := e.node.GetRawTransactionVerboseBool(txHash0)
 	if err != nil {
-		return nil, fmt.Errorf("GetRawTransactionVerboseBool err: %s", err.Error())
+		return nil, fmt.Errorf("getRawTransactionVerboseBool err: %s", err.Error())
 	}
 
 	if file.Op == "transfer" {
@@ -71,6 +73,22 @@ func (e *Explorer) fileDecode(tx *btcjson.TxRawResult, number int64) (*models.Fi
 		}
 	}
 
+	// Unified entry: detect cardity JSON body and route to executeCardity
+	if len(file.FileData) > 0 {
+		var mp map[string]interface{}
+		if json.Unmarshal(file.FileData, &mp) == nil {
+			if p, ok := mp["p"].(string); ok {
+				lp := strings.ToLower(p)
+				if lp == "cardity" || lp == "cardinals" || lp == "cpl" {
+					raw := string(file.FileData)
+					if err := e.executeCardity(tx.Txid, tx.BlockHash, number, raw); err != nil {
+						log.Error("file", "executeCardity", err, "tx_hash", tx.Txid)
+					}
+				}
+			}
+		}
+	}
+
 	reader := bytes.NewReader(file.FileData)
 
 	hash, _ := e.ipfs.Add(reader)
@@ -81,7 +99,7 @@ func (e *Explorer) fileDecode(tx *btcjson.TxRawResult, number int64) (*models.Fi
 
 	err = e.dbc.DB.Create(file).Error
 	if err != nil {
-		return nil, fmt.Errorf("CreateFileInfo err: %s", err.Error())
+		return nil, fmt.Errorf("createFileInfo err: %s", err.Error())
 	}
 
 	return file, nil

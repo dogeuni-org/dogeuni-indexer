@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/dogecoinw/doged/chaincfg/chainhash"
 	"strings"
 	"time"
 )
@@ -64,13 +65,31 @@ type cardityEnvelope struct {
 }
 
 func (e *Explorer) cardityDecode(rawJSON string) (*cardityEnvelope, error) {
+	// try direct JSON first
+	b := []byte(strings.TrimSpace(rawJSON))
 	env := &cardityEnvelope{}
-	if err := json.Unmarshal([]byte(rawJSON), env); err != nil {
-		return nil, err
+	if err := json.Unmarshal(b, env); err != nil {
+		// try hex-wrapped JSON
+		hx := strings.TrimPrefix(string(b), "0x")
+		if hb, herr := hex.DecodeString(hx); herr == nil {
+			if json.Unmarshal(hb, env) == nil {
+				b = hb
+			}
+		}
 	}
+	// validate protocol marker
 	pl := strings.ToLower(env.P)
 	if pl != "cardity" && pl != "cardinals" && pl != "cpl" {
 		return nil, fmt.Errorf("not cardity payload")
+	}
+	// alias handling: hex -> FileHex if not set
+	var mp map[string]interface{}
+	if json.Unmarshal(b, &mp) == nil {
+		if env.FileHex == "" {
+			if v, ok := mp["hex"].(string); ok && v != "" {
+				env.FileHex = v
+			}
+		}
 	}
 	return env, nil
 }
@@ -82,12 +101,30 @@ func (e *Explorer) executeCardity(txhash, blockHash string, height int64, rawJSO
 	}
 
 	now := time.Now().Unix()
+	// derive from address from vin[0] prevout
+	fromAddress := ""
+	if h, herr := chainhash.NewHashFromStr(txhash); herr == nil {
+		if txv, terr := e.node.GetRawTransactionVerboseBool(h); terr == nil && len(txv.Vin) > 0 {
+			vin0 := txv.Vin[0]
+			if ph, phErr := chainhash.NewHashFromStr(vin0.Txid); phErr == nil {
+				if prev, prevErr := e.node.GetRawTransactionVerboseBool(ph); prevErr == nil {
+					voutIdx := vin0.Vout
+					if int(voutIdx) < len(prev.Vout) {
+						addrs := prev.Vout[voutIdx].ScriptPubKey.Addresses
+						if len(addrs) > 0 {
+							fromAddress = addrs[0]
+						}
+					}
+				}
+			}
+		}
+	}
 	switch strings.ToLower(env.Op) {
 	case "deploy":
 		// compute a contract id fallback if absent
 		contractId := env.ContractId
 		if contractId == "" {
-			contractId = fmt.Sprintf("%s", txhash)
+			contractId = txhash
 		}
 		abiText := ""
 		if len(env.Abi) > 0 {
@@ -124,6 +161,7 @@ func (e *Explorer) executeCardity(txhash, blockHash string, height int64, rawJSO
 			PackageId:    env.PackageId,
 			ModuleName:   env.ModuleName,
 			DeployTxHash: txhash,
+			Creator:      fromAddress,
 			BlockHash:    blockHash,
 			BlockNumber:  height,
 			CreateDate:   now,
@@ -216,6 +254,7 @@ func (e *Explorer) executeCardity(txhash, blockHash string, height int64, rawJSO
 			MethodFQN:   fqn,
 			ArgsJSON:    string(env.Args),
 			ArgsText:    truncate(string(env.Args), 240),
+			FromAddress: fromAddress,
 			TxHash:      txhash,
 			BlockHash:   blockHash,
 			BlockNumber: height,

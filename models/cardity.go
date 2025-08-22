@@ -31,6 +31,7 @@ type CardityInvocationLog struct {
 	MethodFQN   string `json:"method_fqn" gorm:"index"`
 	ArgsJSON    string `json:"args_json" gorm:"type:text"`
 	ArgsText    string `json:"args_text" gorm:"type:varchar(256);index"`
+	FromAddress string `json:"from_address" gorm:"index"`
 	TxHash      string `json:"tx_hash" gorm:"index,uniqueIndex:uniq_cardi_inv"`
 	BlockHash   string `json:"block_hash"`
 	BlockNumber int64  `json:"block_number" gorm:"index"`
