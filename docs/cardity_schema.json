@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Cardity Envelope",
+  "type": "object",
+  "properties": {
+    "p": {"enum": ["cardity", "cardinals", "cpl"]},
+    "protocol": {"type": "string"},
+    "version": {"type": "string"},
+    "op": {"enum": ["deploy", "deploy_package", "deploy_part", "invoke", "event"]},
+    "contract_id": {"type": "string"},
+    "package_id": {"type": "string"},
+    "module": {"type": "string"},
+    "method": {"type": "string"},
+    "args": {},
+    "abi": {},
+    "abi_b64": {"type": "string"},
+    "abi_cid": {"type": "string"},
+    "carc_b64": {"type": "string"},
+    "file_b64": {"type": "string"},
+    "file_hex": {"type": "string"},
+    "bundle_id": {"type": "string"},
+    "idx": {"type": "integer", "minimum": 0},
+    "total": {"type": "integer", "minimum": 0},
+    "event_name": {"type": "string"},
+    "params": {}
+  },
+  "required": ["p", "op"],
+  "additionalProperties": true
+}

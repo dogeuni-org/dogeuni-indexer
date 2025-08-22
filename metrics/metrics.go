@@ -30,8 +30,16 @@ var (
 	CardityLastBlock = prometheus.NewGauge(
 		prometheus.GaugeOpts{Name: "cardity_last_block", Help: "Last processed block height"},
 	)
+	CardityLastBlockLag = prometheus.NewGauge(
+		prometheus.GaugeOpts{Name: "cardity_last_block_lag", Help: "Node tip - last processed block"},
+	)
+	CardityDecodeFailRate = prometheus.NewGauge(
+		prometheus.GaugeOpts{Name: "cardity_decode_fail_rate", Help: "Decode failure rate snapshot"},
+	)
 
 	lastBlock int64
+	decTotal  uint64
+	decFail   uint64
 )
 
 func MustRegister() {
@@ -43,6 +51,8 @@ func MustRegister() {
 		CardityDecodeDuration,
 		CardityBundlesIncomplete,
 		CardityLastBlock,
+		CardityLastBlockLag,
+		CardityDecodeFailRate,
 	)
 }
 
@@ -57,4 +67,15 @@ func SetBundlesIncomplete(n int) { CardityBundlesIncomplete.Set(float64(n)) }
 func SetLastBlock(height int64) {
 	atomic.StoreInt64(&lastBlock, height)
 	CardityLastBlock.Set(float64(height))
+}
+func SetLastBlockLag(lag int64) { CardityLastBlockLag.Set(float64(lag)) }
+
+func IncDecodeTotal() { atomic.AddUint64(&decTotal, 1) }
+func IncDecodeFail()  { atomic.AddUint64(&decFail, 1) }
+func UpdateDecodeFailRate() {
+	total := atomic.LoadUint64(&decTotal)
+	fail := atomic.LoadUint64(&decFail)
+	if total == 0 { CardityDecodeFailRate.Set(0); return }
+	rate := float64(fail) / float64(total)
+	CardityDecodeFailRate.Set(rate)
 }

@@ -9,15 +9,17 @@ import (
 	"dogeuni-indexer/router_v3"
 	"dogeuni-indexer/storage"
 	"dogeuni-indexer/storage_v3"
-	"github.com/dogecoinw/doged/rpcclient"
-	"github.com/dogecoinw/go-dogecoin/log"
-	"github.com/gin-gonic/gin"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	shell "github.com/ipfs/go-ipfs-api"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
+
+	"github.com/dogecoinw/doged/rpcclient"
+	"github.com/dogecoinw/go-dogecoin/log"
+	"github.com/gin-gonic/gin"
+	shell "github.com/ipfs/go-ipfs-api"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
@@ -75,13 +77,32 @@ func main() {
 			c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
 			c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept")
 			c.Writer.Header().Set("Access-Control-Max-Age", "3600")
-			if c.Request.Method == "OPTIONS" { c.AbortWithStatus(200); return }
+			if c.Request.Method == "OPTIONS" {
+				c.AbortWithStatus(200)
+				return
+			}
 			c.Next()
 		})
+		grt.Use(router.CardityRateLimitTimeout())
 
 		grt.GET("/metrics", func(c *gin.Context) {
 			promhttp.Handler().ServeHTTP(c.Writer, c.Request)
 		})
+
+		// launch background lag updater
+		go func() {
+			tkr := time.NewTicker(5 * time.Minute)
+			defer tkr.Stop()
+			for {
+				select {
+				case <-tkr.C:
+					// Placeholder: if needed, compute tip - lastBlock via external state; set 0 to avoid misleading value
+					metrics.SetLastBlockLag(0)
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
 
 		rt := router_v3.NewRouter(mysqlClient, dbClient, levelClient, rpcClient, ipfs)
 		grt.POST("/v3/info/lastnumber", rt.LastNumber)
@@ -100,7 +121,9 @@ func main() {
 			v4.GET("/cardity/modules/:packageId", cardityRouter.ModulesByPackage)
 		}
 
-		if err := grt.Run(cfg.HttpServer.Server); err != nil { panic(err) }
+		if err := grt.Run(cfg.HttpServer.Server); err != nil {
+			panic(err)
+		}
 	}
 
 	c := make(chan os.Signal)

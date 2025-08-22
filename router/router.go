@@ -2,6 +2,7 @@ package router
 
 import (
 	"bytes"
+	"context"
 	"dogeuni-indexer/storage"
 	"dogeuni-indexer/utils"
 	"encoding/hex"
@@ -10,7 +11,41 @@ import (
 	"github.com/dogecoinw/doged/wire"
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"time"
 )
+
+// simple token bucket
+var cardityTokens = make(chan struct{}, 50)
+
+func init() {
+	for i := 0; i < cap(cardityTokens); i++ { cardityTokens <- struct{}{} }
+}
+
+func CardityRateLimitTimeout() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.URL.Path == "/v4/cardity/contracts" ||
+			c.Request.URL.Path == "/v4/cardity/invocations" ||
+			c.Request.URL.Path == "/v4/cardity/events" ||
+			c.Request.URL.Path == "/v4/cardity/packages" ||
+			c.Request.URL.Path == "/v4/cardity/modules" ||
+			len(c.Request.URL.Path) >= len("/v4/cardity/") && c.Request.URL.Path[:len("/v4/cardity/")] == "/v4/cardity/" {
+			select {
+			case <-cardityTokens:
+				defer func() { cardityTokens <- struct{}{} }()
+				ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+				defer cancel()
+				c.Request = c.Request.WithContext(ctx)
+				c.Next()
+				return
+			case <-time.After(2 * time.Second):
+				c.JSON(http.StatusTooManyRequests, gin.H{"code": 429, "msg": "rate limited", "data": nil})
+				c.Abort()
+				return
+			}
+		}
+		c.Next()
+	}
+}
 
 type Router struct {
 	dbc  *storage.DBClient

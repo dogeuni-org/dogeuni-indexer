@@ -3,6 +3,7 @@ package explorer
 import (
 	"crypto/sha256"
 	"dogeuni-indexer/models"
+	"dogeuni-indexer/metrics"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -30,14 +31,20 @@ func orderJSON(v interface{}) interface{} {
 	switch t := v.(type) {
 	case map[string]interface{}:
 		keys := make([]string, 0, len(t))
-		for k := range t { keys = append(keys, k) }
+		for k := range t {
+			keys = append(keys, k)
+		}
 		sort.Strings(keys)
 		m := make(map[string]interface{}, len(t))
-		for _, k := range keys { m[k] = orderJSON(t[k]) }
+		for _, k := range keys {
+			m[k] = orderJSON(t[k])
+		}
 		return m
 	case []interface{}:
 		arr := make([]interface{}, len(t))
-		for i := range t { arr[i] = orderJSON(t[i]) }
+		for i := range t {
+			arr[i] = orderJSON(t[i])
+		}
 		return arr
 	default:
 		return v
@@ -45,11 +52,17 @@ func orderJSON(v interface{}) interface{} {
 }
 
 func tryBase64(s string) ([]byte, bool) {
-	if s == "" { return nil, false }
+	if s == "" {
+		return nil, false
+	}
 	p := s
-	if m := len(p) % 4; m != 0 { p = p + strings.Repeat("=", 4-m) }
+	if m := len(p) % 4; m != 0 {
+		p = p + strings.Repeat("=", 4-m)
+	}
 	b, err := base64.StdEncoding.DecodeString(p)
-	if err != nil { return nil, false }
+	if err != nil {
+		return nil, false
+	}
 	return b, true
 }
 
@@ -105,8 +118,8 @@ type cardityEnvelope struct {
 	FileB64     string `json:"file_b64"`
 	FileHex     string `json:"file_hex"`
 	// event placeholder
-	EventName   string          `json:"event_name"`
-	Params      json.RawMessage `json:"params"`
+	EventName string          `json:"event_name"`
+	Params    json.RawMessage `json:"params"`
 }
 
 func normalizeABI(env *cardityEnvelope) (abiJSON string, abiHash string, sourceType string) {
@@ -190,8 +203,14 @@ func (e *Explorer) cardityDecode(rawJSON string) (*cardityEnvelope, error) {
 }
 
 func (e *Explorer) executeCardity(txhash, blockHash string, height int64, rawJSON string) error {
+	start := time.Now()
+	metrics.IncDecodeTotal()
 	env, err := e.cardityDecode(rawJSON)
-	if err != nil { return err }
+	if err != nil {
+		metrics.IncDecodeFail()
+		metrics.UpdateDecodeFailRate()
+		return err
+	}
 
 	now := time.Now().Unix()
 	fromAddress := ""
@@ -203,7 +222,9 @@ func (e *Explorer) executeCardity(txhash, blockHash string, height int64, rawJSO
 					voutIdx := vin0.Vout
 					if int(voutIdx) < len(prev.Vout) {
 						addrs := prev.Vout[voutIdx].ScriptPubKey.Addresses
-						if len(addrs) > 0 { fromAddress = addrs[0] }
+						if len(addrs) > 0 {
+							fromAddress = addrs[0]
+						}
 					}
 				}
 			}
@@ -212,57 +233,90 @@ func (e *Explorer) executeCardity(txhash, blockHash string, height int64, rawJSO
 
 	// precompute common derived fields
 	contractRef := ""
-	if env.Protocol != "" && env.Version != "" { contractRef = env.Protocol + "@" + env.Version }
+	if env.Protocol != "" && env.Version != "" {
+		contractRef = env.Protocol + "@" + env.Version
+	}
 	abiJSON, abiHash, abiSrc := normalizeABI(env)
 
 	switch strings.ToLower(env.Op) {
 	case "deploy":
 		contractId := env.ContractId
-		if contractId == "" { contractId = txhash }
+		if contractId == "" {
+			contractId = txhash
+		}
 		carcB64 := firstNonEmpty(env.CarcB64, env.FileB64)
 		carcHex := env.FileHex
 		var sha string
 		var size int64
 		if carcB64 != "" {
 			if b, err := base64.StdEncoding.DecodeString(carcB64); err == nil {
-				if hasCRAC(b) { sha = fmt.Sprintf("%x", sha256.Sum256(b)); size = int64(len(b)) } else { log.Warn("cardity","deploy","invalid carc magic","tx",txhash) }
+				if hasCRAC(b) {
+					sha = fmt.Sprintf("%x", sha256.Sum256(b))
+					size = int64(len(b))
+				} else {
+					log.Warn("cardity", "deploy", "invalid carc magic", "tx", txhash)
+				}
 			}
 		} else if carcHex != "" {
 			if b, err := hex.DecodeString(strings.TrimPrefix(carcHex, "0x")); err == nil {
-				if hasCRAC(b) { sha = fmt.Sprintf("%x", sha256.Sum256(b)); size = int64(len(b)) } else { log.Warn("cardity","deploy","invalid carc magic","tx",txhash) }
+				if hasCRAC(b) {
+					sha = fmt.Sprintf("%x", sha256.Sum256(b))
+					size = int64(len(b))
+				} else {
+					log.Warn("cardity", "deploy", "invalid carc magic", "tx", txhash)
+				}
 			}
 		}
 		c := &models.CardityContract{
-			ContractId:   contractId,
-			Protocol:     env.Protocol,
-			Version:      env.Version,
-			ContractRef:  contractRef,
-			AbiJSON:      abiJSON,
-			AbiHash:      abiHash,
+			ContractId:    contractId,
+			Protocol:      env.Protocol,
+			Version:       env.Version,
+			ContractRef:   contractRef,
+			AbiJSON:       abiJSON,
+			AbiHash:       abiHash,
 			AbiSourceType: abiSrc,
-			AbiCID:       env.AbiCID,
-			CarcSHA256:   sha,
-			Size:         size,
-			PackageId:    env.PackageId,
-			ModuleName:   env.ModuleName,
-			DeployTxHash: txhash,
-			Creator:      fromAddress,
-			BlockHash:    blockHash,
-			BlockNumber:  height,
-			CreateDate:   now,
+			AbiCID:        env.AbiCID,
+			CarcSHA256:    sha,
+			Size:          size,
+			PackageId:     env.PackageId,
+			ModuleName:    env.ModuleName,
+			DeployTxHash:  txhash,
+			Creator:       fromAddress,
+			BlockHash:     blockHash,
+			BlockNumber:   height,
+			CreateDate:    now,
 		}
-		if err := e.dbc.SaveCardityContract(c); err != nil { return fmt.Errorf("SaveCardityContract err: %v", err) }
+		if err := e.dbc.SaveCardityContract(c); err != nil {
+			return fmt.Errorf("SaveCardityContract err: %v", err)
+		}
+		metrics.IncDeploy("deploy")
+		metrics.ObserveDecode(time.Since(start).Seconds())
+		metrics.UpdateDecodeFailRate()
 		return nil
 	case "deploy_package":
-		pkg := &models.CardityPackage{ PackageId: env.PackageId, Version: env.Version, PackageABI: string(env.Abi), ModulesJSON: string(env.Modules), DeployTxHash: txhash, BlockHash: blockHash, BlockNumber: height, CreateDate: now }
-		if err := e.dbc.SaveCardityPackage(pkg); err != nil { return fmt.Errorf("SaveCardityPackage err: %v", err) }
+		pkg := &models.CardityPackage{PackageId: env.PackageId, Version: env.Version, PackageABI: string(env.Abi), ModulesJSON: string(env.Modules), DeployTxHash: txhash, BlockHash: blockHash, BlockNumber: height, CreateDate: now}
+		if err := e.dbc.SaveCardityPackage(pkg); err != nil {
+			return fmt.Errorf("SaveCardityPackage err: %v", err)
+		}
+		metrics.IncDeploy("deploy_package")
+		metrics.ObserveDecode(time.Since(start).Seconds())
+		metrics.UpdateDecodeFailRate()
 		return nil
 	case "deploy_part":
 		idx, total := 0, 0
-		if env.Idx != nil { idx = *env.Idx }
-		if env.Total != nil { total = *env.Total }
-		part := &models.CardityBundlePart{ BundleId: env.BundleId, Idx: idx, Total: total, PackageId: env.PackageId, Version: env.Version, ModuleName: env.ModuleName, AbiJSON: string(env.Abi), CarcB64: env.CarcB64, TxHash: txhash, BlockHash: blockHash, BlockNumber: height, CreateDate: now }
-		if err := e.dbc.SaveBundlePart(part); err != nil { return fmt.Errorf("SaveBundlePart err: %v", err) }
+		if env.Idx != nil {
+			idx = *env.Idx
+		}
+		if env.Total != nil {
+			total = *env.Total
+		}
+		part := &models.CardityBundlePart{BundleId: env.BundleId, Idx: idx, Total: total, PackageId: env.PackageId, Version: env.Version, ModuleName: env.ModuleName, AbiJSON: string(env.Abi), CarcB64: env.CarcB64, TxHash: txhash, BlockHash: blockHash, BlockNumber: height, CreateDate: now}
+		if err := e.dbc.SaveBundlePart(part); err != nil {
+			return fmt.Errorf("SaveBundlePart err: %v", err)
+		}
+		metrics.IncDeploy("deploy_part")
+		metrics.ObserveDecode(time.Since(start).Seconds())
+		metrics.UpdateDecodeFailRate()
 		if env.BundleId != "" {
 			parts, err := e.dbc.FindBundleParts(env.BundleId)
 			if err == nil && len(parts) > 0 && parts[0].Total > 0 && len(parts) == parts[0].Total {
@@ -275,28 +329,49 @@ func (e *Explorer) executeCardity(txhash, blockHash string, height int64, rawJSO
 								sha = fmt.Sprintf("%x", sha256.Sum256(b))
 								size = int64(len(b))
 							} else {
-								log.Warn("cardity","deploy_part","invalid carc magic","tx", p.TxHash)
+								log.Warn("cardity", "deploy_part", "invalid carc magic", "tx", p.TxHash)
 							}
 						}
 					}
-					_ = e.dbc.SaveCardityModule(&models.CardityModule{ PackageId: p.PackageId, Name: p.ModuleName, AbiJSON: p.AbiJSON, CarcB64: p.CarcB64, CarcSHA256: sha, Size: size, DeployTxHash: p.TxHash, BlockHash: p.BlockHash, BlockNumber: p.BlockNumber, CreateDate: p.CreateDate })
+					_ = e.dbc.SaveCardityModule(&models.CardityModule{PackageId: p.PackageId, Name: p.ModuleName, AbiJSON: p.AbiJSON, CarcB64: p.CarcB64, CarcSHA256: sha, Size: size, DeployTxHash: p.TxHash, BlockHash: p.BlockHash, BlockNumber: p.BlockNumber, CreateDate: p.CreateDate})
 				}
 				_ = e.dbc.SaveCardityPackage(&models.CardityPackage{PackageId: env.PackageId, Version: env.Version})
 			}
 		}
 		return nil
 	case "invoke":
-		contractId := env.ContractId; if contractId == "" { contractId = env.ContractRef }
-		method := env.Method; if env.ModuleName != "" && !strings.Contains(method, ".") { method = env.ModuleName + "." + method }
-		inv := &models.CardityInvocationLog{ ContractId: contractId, Method: method, MethodFQN: method, ArgsJSON: string(env.Args), ArgsText: truncate(string(env.Args),240), FromAddress: fromAddress, TxHash: txhash, BlockHash: blockHash, BlockNumber: height, CreateDate: now }
-		if err := e.dbc.SaveCardityInvocation(inv); err != nil { return fmt.Errorf("SaveCardityInvocation err: %v", err) }
+		contractId := env.ContractId
+		if contractId == "" {
+			contractId = env.ContractRef
+		}
+		method := env.Method
+		if env.ModuleName != "" && !strings.Contains(method, ".") {
+			method = env.ModuleName + "." + method
+		}
+		inv := &models.CardityInvocationLog{ContractId: contractId, Method: method, MethodFQN: method, ArgsJSON: string(env.Args), ArgsText: truncate(string(env.Args), 240), FromAddress: fromAddress, TxHash: txhash, BlockHash: blockHash, BlockNumber: height, CreateDate: now}
+		if err := e.dbc.SaveCardityInvocation(inv); err != nil {
+			return fmt.Errorf("SaveCardityInvocation err: %v", err)
+		}
+		metrics.IncInvoke()
+		metrics.ObserveDecode(time.Since(start).Seconds())
+		metrics.UpdateDecodeFailRate()
 		return nil
 	case "event":
-		// placeholder write
+		// basic validation
+		if env.EventName == "" || (env.ContractId == "" && env.ContractRef == "") {
+			log.Warn("cardity", "event", "missing event_name or contract reference", "tx", txhash)
+			metrics.ObserveDecode(time.Since(start).Seconds())
+			metrics.UpdateDecodeFailRate()
+			return nil
+		}
 		el := &models.CardityEventLog{ ContractId: env.ContractId, EventName: env.EventName, ParamsJSON: string(env.Params), TxHash: txhash, BlockHash: blockHash, BlockNumber: height, CreateDate: now }
 		_ = e.dbc.SaveCardityEvents([]*models.CardityEventLog{el})
+		metrics.ObserveDecode(time.Since(start).Seconds())
+		metrics.UpdateDecodeFailRate()
 		return nil
 	default:
+		metrics.ObserveDecode(time.Since(start).Seconds())
+		metrics.UpdateDecodeFailRate()
 		return fmt.Errorf("unsupported cardity op: %s", env.Op)
 	}
 }

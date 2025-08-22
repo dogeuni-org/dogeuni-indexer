@@ -31,30 +31,48 @@ func (r *CardityRouter) ABI(c *gin.Context) {
 // Contracts list with enhanced filters
 func (r *CardityRouter) Contracts(c *gin.Context) {
 	type req struct {
-		Creator    string `json:"creator"`
-		Protocol   string `json:"protocol"`
-		Version    string `json:"version"`
-		CarcSHA256 string `json:"carc_sha256"`
-		AbiHash    string `json:"abi_hash"`
+		Creator     string `json:"creator"`
+		Protocol    string `json:"protocol"`
+		Version     string `json:"version"`
+		CarcSHA256  string `json:"carc_sha256"`
+		AbiHash     string `json:"abi_hash"`
 		ContractRef string `json:"contract_ref"`
-		Offset     int    `json:"offset"`
-		Limit      int    `json:"limit"`
-		SinceBlock int64  `json:"since_block"`
-		UntilBlock int64  `json:"until_block"`
+		Offset      int    `json:"offset"`
+		Limit       int    `json:"limit"`
+		SinceBlock  int64  `json:"since_block"`
+		UntilBlock  int64  `json:"until_block"`
 	}
 	var p req
 	_ = c.ShouldBindJSON(&p)
-	if p.Limit <= 0 || p.Limit > 200 { p.Limit = 50 }
+	if p.Limit <= 0 || p.Limit > 200 {
+		p.Limit = 50
+	}
 
 	q := r.dbc.DB.Model(&models.CardityContract{})
-	if p.Creator != "" { q = q.Where("creator = ?", p.Creator) }
-	if p.Protocol != "" { q = q.Where("protocol = ?", p.Protocol) }
-	if p.Version != "" { q = q.Where("version = ?", p.Version) }
-	if p.CarcSHA256 != "" { q = q.Where("carc_sha256 = ?", p.CarcSHA256) }
-	if p.AbiHash != "" { q = q.Where("abi_hash = ?", p.AbiHash) }
-	if p.ContractRef != "" { q = q.Where("contract_ref = ?", p.ContractRef) }
-	if p.SinceBlock > 0 { q = q.Where("block_number >= ?", p.SinceBlock) }
-	if p.UntilBlock > 0 { q = q.Where("block_number <= ?", p.UntilBlock) }
+	if p.Creator != "" {
+		q = q.Where("creator = ?", p.Creator)
+	}
+	if p.Protocol != "" {
+		q = q.Where("protocol = ?", p.Protocol)
+	}
+	if p.Version != "" {
+		q = q.Where("version = ?", p.Version)
+	}
+	if p.CarcSHA256 != "" {
+		q = q.Where("carc_sha256 = ?", p.CarcSHA256)
+	}
+	if p.AbiHash != "" {
+		q = q.Where("abi_hash = ?", p.AbiHash)
+	}
+	if p.ContractRef != "" {
+		q = q.Where("contract_ref = ?", p.ContractRef)
+	}
+	if p.SinceBlock > 0 {
+		q = q.Where("block_number >= ?", p.SinceBlock)
+	}
+	if p.UntilBlock > 0 {
+		q = q.Where("block_number <= ?", p.UntilBlock)
+	}
 	var total int64
 	_ = q.Count(&total).Error
 	results := make([]*models.CardityContract, 0)
@@ -76,25 +94,39 @@ func (r *CardityRouter) Contract(c *gin.Context) {
 // Invocations list with enhanced filters
 func (r *CardityRouter) Invocations(c *gin.Context) {
 	type req struct {
-		ContractId string `json:"contract_id"`
-		Method     string `json:"method"`
-		MethodFQN  string `json:"method_fqn"`
+		ContractId  string `json:"contract_id"`
+		Method      string `json:"method"`
+		MethodFQN   string `json:"method_fqn"`
 		FromAddress string `json:"from_address"`
-		Offset     int    `json:"offset"`
-		Limit      int    `json:"limit"`
-		SinceBlock int64  `json:"since_block"`
-		UntilBlock int64  `json:"until_block"`
+		Offset      int    `json:"offset"`
+		Limit       int    `json:"limit"`
+		SinceBlock  int64  `json:"since_block"`
+		UntilBlock  int64  `json:"until_block"`
 	}
 	var p req
 	_ = c.ShouldBindJSON(&p)
-	if p.Limit <= 0 || p.Limit > 200 { p.Limit = 50 }
+	if p.Limit <= 0 || p.Limit > 200 {
+		p.Limit = 50
+	}
 
 	q := r.dbc.DB.Model(&models.CardityInvocationLog{})
-	if p.ContractId != "" { q = q.Where("contract_id = ?", p.ContractId) }
-	if p.MethodFQN != "" { q = q.Where("method_fqn = ?", p.MethodFQN) } else if p.Method != "" { q = q.Where("method = ?", p.Method) }
-	if p.FromAddress != "" { q = q.Where("from_address = ?", p.FromAddress) }
-	if p.SinceBlock > 0 { q = q.Where("block_number >= ?", p.SinceBlock) }
-	if p.UntilBlock > 0 { q = q.Where("block_number <= ?", p.UntilBlock) }
+	if p.ContractId != "" {
+		q = q.Where("contract_id = ?", p.ContractId)
+	}
+	if p.MethodFQN != "" {
+		q = q.Where("method_fqn = ?", p.MethodFQN)
+	} else if p.Method != "" {
+		q = q.Where("method = ?", p.Method)
+	}
+	if p.FromAddress != "" {
+		q = q.Where("from_address = ?", p.FromAddress)
+	}
+	if p.SinceBlock > 0 {
+		q = q.Where("block_number >= ?", p.SinceBlock)
+	}
+	if p.UntilBlock > 0 {
+		q = q.Where("block_number <= ?", p.UntilBlock)
+	}
 	var total int64
 	_ = q.Count(&total).Error
 	results := make([]*models.CardityInvocationLog, 0)
@@ -111,6 +143,7 @@ func (r *CardityRouter) InvocationsByContract(c *gin.Context) {
 	offsetStr := c.Query("offset")
 	sinceStr := c.Query("since_block")
 	untilStr := c.Query("until_block")
+	cursorStr := c.Query("cursor_id")
 	limit, _ := strconv.Atoi(limitStr)
 	offset, _ := strconv.Atoi(offsetStr)
 	if limit <= 0 || limit > 200 { limit = 50 }
@@ -119,11 +152,14 @@ func (r *CardityRouter) InvocationsByContract(c *gin.Context) {
 	if fromAddress != "" { q = q.Where("from_address = ?", fromAddress) }
 	if sinceStr != "" { if v, err := strconv.ParseInt(sinceStr, 10, 64); err == nil { q = q.Where("block_number >= ?", v) } }
 	if untilStr != "" { if v, err := strconv.ParseInt(untilStr, 10, 64); err == nil { q = q.Where("block_number <= ?", v) } }
+	if cursorStr != "" { if v, err := strconv.ParseInt(cursorStr, 10, 64); err == nil { q = q.Where("id < ?", v) } }
 	var total int64
 	_ = q.Count(&total).Error
 	list := make([]*models.CardityInvocationLog, 0)
-	_ = q.Offset(offset).Limit(limit).Order("block_number desc, id desc").Find(&list).Error
-	c.JSON(http.StatusOK, gin.H{"code": 200, "msg": "success", "data": list, "total": total})
+	_ = q.Order("id desc").Offset(offset).Limit(limit).Find(&list).Error
+	nextCursor := ""
+	if len(list) > 0 { nextCursor = strconv.FormatInt(list[len(list)-1].Id, 10) }
+	c.JSON(http.StatusOK, gin.H{"code": 200, "msg": "success", "data": list, "total": total, "next_cursor": nextCursor})
 }
 
 // Events list
@@ -138,13 +174,23 @@ func (r *CardityRouter) Events(c *gin.Context) {
 	}
 	var p req
 	_ = c.ShouldBindJSON(&p)
-	if p.Limit <= 0 || p.Limit > 200 { p.Limit = 50 }
+	if p.Limit <= 0 || p.Limit > 200 {
+		p.Limit = 50
+	}
 
 	q := r.dbc.DB.Model(&models.CardityEventLog{})
-	if p.ContractId != "" { q = q.Where("contract_id = ?", p.ContractId) }
-	if p.EventName != "" { q = q.Where("event_name = ?", p.EventName) }
-	if p.SinceBlock > 0 { q = q.Where("block_number >= ?", p.SinceBlock) }
-	if p.UntilBlock > 0 { q = q.Where("block_number <= ?", p.UntilBlock) }
+	if p.ContractId != "" {
+		q = q.Where("contract_id = ?", p.ContractId)
+	}
+	if p.EventName != "" {
+		q = q.Where("event_name = ?", p.EventName)
+	}
+	if p.SinceBlock > 0 {
+		q = q.Where("block_number >= ?", p.SinceBlock)
+	}
+	if p.UntilBlock > 0 {
+		q = q.Where("block_number <= ?", p.UntilBlock)
+	}
 	var total int64
 	_ = q.Count(&total).Error
 	results := make([]*models.CardityEventLog, 0)
@@ -163,11 +209,19 @@ func (r *CardityRouter) Packages(c *gin.Context) {
 	}
 	var p req
 	_ = c.ShouldBindJSON(&p)
-	if p.Limit <= 0 || p.Limit > 200 { p.Limit = 50 }
+	if p.Limit <= 0 || p.Limit > 200 {
+		p.Limit = 50
+	}
 	q := r.dbc.DB.Model(&models.CardityPackage{})
-	if p.PackageId != "" { q = q.Where("package_id = ?", p.PackageId) }
-	if p.SinceBlock > 0 { q = q.Where("block_number >= ?", p.SinceBlock) }
-	if p.UntilBlock > 0 { q = q.Where("block_number <= ?", p.UntilBlock) }
+	if p.PackageId != "" {
+		q = q.Where("package_id = ?", p.PackageId)
+	}
+	if p.SinceBlock > 0 {
+		q = q.Where("block_number >= ?", p.SinceBlock)
+	}
+	if p.UntilBlock > 0 {
+		q = q.Where("block_number <= ?", p.UntilBlock)
+	}
 	var total int64
 	_ = q.Count(&total).Error
 	list := make([]*models.CardityPackage, 0)
@@ -187,12 +241,22 @@ func (r *CardityRouter) Modules(c *gin.Context) {
 	}
 	var p req
 	_ = c.ShouldBindJSON(&p)
-	if p.Limit <= 0 || p.Limit > 200 { p.Limit = 50 }
+	if p.Limit <= 0 || p.Limit > 200 {
+		p.Limit = 50
+	}
 	q := r.dbc.DB.Model(&models.CardityModule{})
-	if p.PackageId != "" { q = q.Where("package_id = ?", p.PackageId) }
-	if p.Name != "" { q = q.Where("name = ?", p.Name) }
-	if p.SinceBlock > 0 { q = q.Where("block_number >= ?", p.SinceBlock) }
-	if p.UntilBlock > 0 { q = q.Where("block_number <= ?", p.UntilBlock) }
+	if p.PackageId != "" {
+		q = q.Where("package_id = ?", p.PackageId)
+	}
+	if p.Name != "" {
+		q = q.Where("name = ?", p.Name)
+	}
+	if p.SinceBlock > 0 {
+		q = q.Where("block_number >= ?", p.SinceBlock)
+	}
+	if p.UntilBlock > 0 {
+		q = q.Where("block_number <= ?", p.UntilBlock)
+	}
 	var total int64
 	_ = q.Count(&total).Error
 	list := make([]*models.CardityModule, 0)
