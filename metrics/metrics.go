@@ -56,7 +56,7 @@ func MustRegister() {
 	)
 }
 
-func IncDeploy(op string) { CardityDeployTotal.WithLabelValues(op).Inc() }
+func IncDeploy(op string)   { CardityDeployTotal.WithLabelValues(op).Inc() }
 func IncInvoke()            { CardityInvokeTotal.Inc() }
 func IncError(stage string) { CardityErrorsTotal.WithLabelValues(stage).Inc() }
 
@@ -75,7 +75,10 @@ func IncDecodeFail()  { atomic.AddUint64(&decFail, 1) }
 func UpdateDecodeFailRate() {
 	total := atomic.LoadUint64(&decTotal)
 	fail := atomic.LoadUint64(&decFail)
-	if total == 0 { CardityDecodeFailRate.Set(0); return }
+	if total == 0 {
+		CardityDecodeFailRate.Set(0)
+		return
+	}
 	rate := float64(fail) / float64(total)
 	CardityDecodeFailRate.Set(rate)
 }

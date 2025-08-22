@@ -1,8 +1,8 @@
 package storage
 
 import (
-	"dogeuni-indexer/models"
 	"dogeuni-indexer/metrics"
+	"dogeuni-indexer/models"
 	"errors"
 	"fmt"
 	"math/big"

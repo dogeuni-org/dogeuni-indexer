@@ -146,19 +146,39 @@ func (r *CardityRouter) InvocationsByContract(c *gin.Context) {
 	cursorStr := c.Query("cursor_id")
 	limit, _ := strconv.Atoi(limitStr)
 	offset, _ := strconv.Atoi(offsetStr)
-	if limit <= 0 || limit > 200 { limit = 50 }
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
 	q := r.dbc.DB.Model(&models.CardityInvocationLog{}).Where("contract_id = ?", contractId)
-	if methodFQN != "" { q = q.Where("method_fqn = ?", methodFQN) }
-	if fromAddress != "" { q = q.Where("from_address = ?", fromAddress) }
-	if sinceStr != "" { if v, err := strconv.ParseInt(sinceStr, 10, 64); err == nil { q = q.Where("block_number >= ?", v) } }
-	if untilStr != "" { if v, err := strconv.ParseInt(untilStr, 10, 64); err == nil { q = q.Where("block_number <= ?", v) } }
-	if cursorStr != "" { if v, err := strconv.ParseInt(cursorStr, 10, 64); err == nil { q = q.Where("id < ?", v) } }
+	if methodFQN != "" {
+		q = q.Where("method_fqn = ?", methodFQN)
+	}
+	if fromAddress != "" {
+		q = q.Where("from_address = ?", fromAddress)
+	}
+	if sinceStr != "" {
+		if v, err := strconv.ParseInt(sinceStr, 10, 64); err == nil {
+			q = q.Where("block_number >= ?", v)
+		}
+	}
+	if untilStr != "" {
+		if v, err := strconv.ParseInt(untilStr, 10, 64); err == nil {
+			q = q.Where("block_number <= ?", v)
+		}
+	}
+	if cursorStr != "" {
+		if v, err := strconv.ParseInt(cursorStr, 10, 64); err == nil {
+			q = q.Where("id < ?", v)
+		}
+	}
 	var total int64
 	_ = q.Count(&total).Error
 	list := make([]*models.CardityInvocationLog, 0)
 	_ = q.Order("id desc").Offset(offset).Limit(limit).Find(&list).Error
 	nextCursor := ""
-	if len(list) > 0 { nextCursor = strconv.FormatInt(list[len(list)-1].Id, 10) }
+	if len(list) > 0 {
+		nextCursor = strconv.FormatInt(list[len(list)-1].Id, 10)
+	}
 	c.JSON(http.StatusOK, gin.H{"code": 200, "msg": "success", "data": list, "total": total, "next_cursor": nextCursor})
 }
 

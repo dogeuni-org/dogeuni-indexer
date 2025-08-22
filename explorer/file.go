@@ -7,13 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/dogecoinw/doged/btcjson"
 	"github.com/dogecoinw/doged/chaincfg/chainhash"
 	"github.com/dogecoinw/go-dogecoin/log"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"strings"
-	"time"
 )
 
 func (e *Explorer) fileDecode(tx *btcjson.TxRawResult, number int64) (*models.FileInfo, error) {

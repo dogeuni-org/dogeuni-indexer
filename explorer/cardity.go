@@ -2,8 +2,8 @@ package explorer
 
 import (
 	"crypto/sha256"
-	"dogeuni-indexer/models"
 	"dogeuni-indexer/metrics"
+	"dogeuni-indexer/models"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -364,7 +364,7 @@ func (e *Explorer) executeCardity(txhash, blockHash string, height int64, rawJSO
 			metrics.UpdateDecodeFailRate()
 			return nil
 		}
-		el := &models.CardityEventLog{ ContractId: env.ContractId, EventName: env.EventName, ParamsJSON: string(env.Params), TxHash: txhash, BlockHash: blockHash, BlockNumber: height, CreateDate: now }
+		el := &models.CardityEventLog{ContractId: env.ContractId, EventName: env.EventName, ParamsJSON: string(env.Params), TxHash: txhash, BlockHash: blockHash, BlockNumber: height, CreateDate: now}
 		_ = e.dbc.SaveCardityEvents([]*models.CardityEventLog{el})
 		metrics.ObserveDecode(time.Since(start).Seconds())
 		metrics.UpdateDecodeFailRate()

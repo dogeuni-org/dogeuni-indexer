@@ -3,9 +3,9 @@ package explorer
 import (
 	"context"
 	"dogeuni-indexer/config"
+	"dogeuni-indexer/metrics"
 	"dogeuni-indexer/models"
 	"dogeuni-indexer/storage"
-	"dogeuni-indexer/metrics"
 	"errors"
 	"fmt"
 	"math/big"

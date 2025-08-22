@@ -4,6 +4,7 @@ import (
 	"dogeuni-indexer/models"
 	"errors"
 	"fmt"
+
 	"github.com/dogecoinw/go-dogecoin/log"
 	"gorm.io/gorm"
 )
@@ -60,12 +61,30 @@ func (e *Explorer) forkBack() error {
 		}
 
 		// Cardity tables cleanup for blocks above fork height
-		if err := tx.Where("block_number > ?", height).Delete(&models.CardityInvocationLog{}).Error; err != nil { tx.Rollback(); return err }
-		if err := tx.Where("block_number > ?", height).Delete(&models.CardityEventLog{}).Error; err != nil { tx.Rollback(); return err }
-		if err := tx.Where("block_number > ?", height).Delete(&models.CardityModule{}).Error; err != nil { tx.Rollback(); return err }
-		if err := tx.Where("block_number > ?", height).Delete(&models.CardityPackage{}).Error; err != nil { tx.Rollback(); return err }
-		if err := tx.Where("block_number > ?", height).Delete(&models.CardityContract{}).Error; err != nil { tx.Rollback(); return err }
-		if err := tx.Where("block_number > ?", height).Delete(&models.CardityBundlePart{}).Error; err != nil { tx.Rollback(); return err }
+		if err := tx.Where("block_number > ?", height).Delete(&models.CardityInvocationLog{}).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+		if err := tx.Where("block_number > ?", height).Delete(&models.CardityEventLog{}).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+		if err := tx.Where("block_number > ?", height).Delete(&models.CardityModule{}).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+		if err := tx.Where("block_number > ?", height).Delete(&models.CardityPackage{}).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+		if err := tx.Where("block_number > ?", height).Delete(&models.CardityContract{}).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+		if err := tx.Where("block_number > ?", height).Delete(&models.CardityBundlePart{}).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
 
 		err = tx.Commit().Error
 		if err != nil {

@@ -7,18 +7,21 @@ import (
 	"dogeuni-indexer/utils"
 	"encoding/hex"
 	"fmt"
+	"net/http"
+	"time"
+
 	"github.com/dogecoinw/doged/rpcclient"
 	"github.com/dogecoinw/doged/wire"
 	"github.com/gin-gonic/gin"
-	"net/http"
-	"time"
 )
 
 // simple token bucket
 var cardityTokens = make(chan struct{}, 50)
 
 func init() {
-	for i := 0; i < cap(cardityTokens); i++ { cardityTokens <- struct{}{} }
+	for i := 0; i < cap(cardityTokens); i++ {
+		cardityTokens <- struct{}{}
+	}
 }
 
 func CardityRateLimitTimeout() gin.HandlerFunc {
