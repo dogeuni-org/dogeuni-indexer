@@ -316,16 +316,9 @@ func (e *Explorer) scan() error {
 				}
 
 			case "cardity":
-				// try parse pushedData as raw json string
-				if len(pushedData) == 0 {
-					log.Error("scanning", "cardity", "empty payload", "txhash", txv.Txid)
-					continue
-				}
-				raw := string(pushedData)
-				if err := e.executeCardity(txv.Txid, txv.BlockHash, e.currentHeight, raw); err != nil {
-					log.Error("scanning", "cardityExecute", err, "txhash", txv.Txid)
-					continue
-				}
+				// OP_RETURN-based Cardity indexing disabled; Cardity is indexed via file-content path only
+				log.Trace("scanning", "cardity", "op-return indexing disabled; use file contentType path", "txhash", txv.Txid)
+				continue
 			default:
 				log.Error("scanning", "op", "not found", "txhash", txv.Txid)
 			}
