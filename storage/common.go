@@ -2,12 +2,14 @@ package storage
 
 import (
 	"dogeuni-indexer/models"
+	"dogeuni-indexer/metrics"
 	"errors"
 	"fmt"
-	"github.com/dogecoinw/go-dogecoin/log"
-	"gorm.io/gorm"
 	"math/big"
 	"time"
+
+	"github.com/dogecoinw/go-dogecoin/log"
+	"gorm.io/gorm"
 )
 
 func (db *DBClient) ScheduledTasks(height int64) error {
@@ -41,6 +43,7 @@ func (db *DBClient) ScheduledTasks(height int64) error {
 		return err
 	}
 
+	metrics.ObserveAssemble(time.Since(s).Seconds())
 	log.Info("explorer", "StakeUpdatePool time", time.Since(s).String())
 	return nil
 }
@@ -48,7 +51,11 @@ func (db *DBClient) ScheduledTasks(height int64) error {
 // CardityAssembleBundles collects bundle parts that reached completeness and persists modules/packages in a single tx
 func (db *DBClient) CardityAssembleBundles(tx *gorm.DB) error {
 	// find bundle_ids whose count(idx) == total
-	type agg struct{ BundleId string; Total int64; Parts int64 }
+	type agg struct {
+		BundleId string
+		Total    int64
+		Parts    int64
+	}
 	rows := make([]*agg, 0)
 	if err := tx.
 		Model(&models.CardityBundlePart{}).
@@ -57,6 +64,10 @@ func (db *DBClient) CardityAssembleBundles(tx *gorm.DB) error {
 		Having("parts > 0 and total > 0 and parts = total").
 		Find(&rows).Error; err != nil {
 		return err
+	}
+	incomplete := int64(0)
+	if err := tx.Model(&models.CardityBundlePart{}).Select("COUNT(DISTINCT bundle_id)").Where("(total = 0 OR total IS NULL) OR (SELECT COUNT(*) FROM cardity_bundle_parts b2 WHERE b2.bundle_id = cardity_bundle_parts.bundle_id) < total").Scan(&incomplete).Error; err == nil {
+		metrics.SetBundlesIncomplete(int(incomplete))
 	}
 	for _, r := range rows {
 		parts := make([]*models.CardityBundlePart, 0)
@@ -81,8 +92,8 @@ func (db *DBClient) CardityAssembleBundles(tx *gorm.DB) error {
 				BlockNumber:  p.BlockNumber,
 				CreateDate:   p.CreateDate,
 			}).Error; err != nil {
-			return err
-		}
+				return err
+			}
 		}
 		if err := tx.Save(&models.CardityPackage{PackageId: parts[0].PackageId, Version: parts[0].Version}).Error; err != nil {
 			return err

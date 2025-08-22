@@ -5,6 +5,7 @@ import (
 	"dogeuni-indexer/config"
 	"dogeuni-indexer/models"
 	"dogeuni-indexer/storage"
+	"dogeuni-indexer/metrics"
 	"errors"
 	"fmt"
 	"math/big"
@@ -341,6 +342,7 @@ func (e *Explorer) scan() error {
 		}
 
 		log.Info("explorer", "scanning end ", e.currentHeight)
+		metrics.SetLastBlock(e.currentHeight)
 	}
 	return nil
 }
