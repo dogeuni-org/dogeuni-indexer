@@ -7,12 +7,51 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/dogecoinw/doged/chaincfg/chainhash"
-	"github.com/dogecoinw/go-dogecoin/log"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/dogecoinw/doged/chaincfg/chainhash"
+	"github.com/dogecoinw/go-dogecoin/log"
 )
+
+// canonicalizeJSON performs a simple canonicalization: stable key order recursively and no extra spaces
+func canonicalizeJSON(raw []byte) ([]byte, error) {
+	var v interface{}
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return nil, err
+	}
+	ordered := orderJSON(v)
+	return json.Marshal(ordered)
+}
+
+func orderJSON(v interface{}) interface{} {
+	switch t := v.(type) {
+	case map[string]interface{}:
+		keys := make([]string, 0, len(t))
+		for k := range t { keys = append(keys, k) }
+		sort.Strings(keys)
+		m := make(map[string]interface{}, len(t))
+		for _, k := range keys { m[k] = orderJSON(t[k]) }
+		return m
+	case []interface{}:
+		arr := make([]interface{}, len(t))
+		for i := range t { arr[i] = orderJSON(t[i]) }
+		return arr
+	default:
+		return v
+	}
+}
+
+func tryBase64(s string) ([]byte, bool) {
+	if s == "" { return nil, false }
+	p := s
+	if m := len(p) % 4; m != 0 { p = p + strings.Repeat("=", 4-m) }
+	b, err := base64.StdEncoding.DecodeString(p)
+	if err != nil { return nil, false }
+	return b, true
+}
 
 func truncate(s string, n int) string {
 	if n <= 0 || len(s) <= n {
@@ -46,6 +85,7 @@ type cardityEnvelope struct {
 	Op          string          `json:"op"`
 	ContractId  string          `json:"contract_id"`
 	Abi         json.RawMessage `json:"abi"` // accept object or string
+	AbiB64      string          `json:"abi_b64"`
 	AbiCID      string          `json:"abi_cid"`
 	CarcB64     string          `json:"carc_b64"`
 	CarB64      string          `json:"car"` // compatibility: raw car json/base64 if provided
@@ -64,6 +104,49 @@ type cardityEnvelope struct {
 	ContentType string `json:"content_type"`
 	FileB64     string `json:"file_b64"`
 	FileHex     string `json:"file_hex"`
+	// event placeholder
+	EventName   string          `json:"event_name"`
+	Params      json.RawMessage `json:"params"`
+}
+
+func normalizeABI(env *cardityEnvelope) (abiJSON string, abiHash string, sourceType string) {
+	// prefer env.Abi if present; else try abi_b64
+	if len(env.Abi) > 0 {
+		canon, err := canonicalizeJSON(env.Abi)
+		if err == nil {
+			h := sha256.Sum256(canon)
+			return string(canon), fmt.Sprintf("%x", h[:]), "object"
+		}
+	}
+	if env.AbiB64 != "" {
+		if b, ok := tryBase64(env.AbiB64); ok && utf8.Valid(b) {
+			canon, err := canonicalizeJSON(b)
+			if err == nil {
+				h := sha256.Sum256(canon)
+				return string(canon), fmt.Sprintf("%x", h[:]), "base64"
+			}
+		}
+	}
+	// allow string abi in env.Abi (quoted string)
+	var s string
+	if err := json.Unmarshal(env.Abi, &s); err == nil && s != "" {
+		if b, ok := tryBase64(s); ok && utf8.Valid(b) {
+			canon, err := canonicalizeJSON(b)
+			if err == nil {
+				h := sha256.Sum256(canon)
+				return string(canon), fmt.Sprintf("%x", h[:]), "base64"
+			}
+		}
+		// if not base64, try parse as json text
+		if utf8.ValidString(s) {
+			canon, err := canonicalizeJSON([]byte(s))
+			if err == nil {
+				h := sha256.Sum256(canon)
+				return string(canon), fmt.Sprintf("%x", h[:]), "string"
+			}
+		}
+	}
+	return "", "", ""
 }
 
 func (e *Explorer) cardityDecode(rawJSON string) (*cardityEnvelope, error) {
@@ -108,12 +191,9 @@ func (e *Explorer) cardityDecode(rawJSON string) (*cardityEnvelope, error) {
 
 func (e *Explorer) executeCardity(txhash, blockHash string, height int64, rawJSON string) error {
 	env, err := e.cardityDecode(rawJSON)
-	if err != nil {
-		return err
-	}
+	if err != nil { return err }
 
 	now := time.Now().Unix()
-	// derive from address from vin[0] prevout
 	fromAddress := ""
 	if h, herr := chainhash.NewHashFromStr(txhash); herr == nil {
 		if txv, terr := e.node.GetRawTransactionVerboseBool(h); terr == nil && len(txv.Vin) > 0 {
@@ -123,54 +203,43 @@ func (e *Explorer) executeCardity(txhash, blockHash string, height int64, rawJSO
 					voutIdx := vin0.Vout
 					if int(voutIdx) < len(prev.Vout) {
 						addrs := prev.Vout[voutIdx].ScriptPubKey.Addresses
-						if len(addrs) > 0 {
-							fromAddress = addrs[0]
-						}
+						if len(addrs) > 0 { fromAddress = addrs[0] }
 					}
 				}
 			}
 		}
 	}
+
+	// precompute common derived fields
+	contractRef := ""
+	if env.Protocol != "" && env.Version != "" { contractRef = env.Protocol + "@" + env.Version }
+	abiJSON, abiHash, abiSrc := normalizeABI(env)
+
 	switch strings.ToLower(env.Op) {
 	case "deploy":
-		// compute a contract id fallback if absent
 		contractId := env.ContractId
-		if contractId == "" {
-			contractId = txhash
-		}
-		abiText := ""
-		if len(env.Abi) > 0 {
-			// store as-is textual JSON (object or string)
-			abiText = string(env.Abi)
-		}
+		if contractId == "" { contractId = txhash }
 		carcB64 := firstNonEmpty(env.CarcB64, env.FileB64)
 		carcHex := env.FileHex
 		var sha string
 		var size int64
 		if carcB64 != "" {
 			if b, err := base64.StdEncoding.DecodeString(carcB64); err == nil {
-				if hasCRAC(b) {
-					sha = fmt.Sprintf("%x", sha256.Sum256(b))
-					size = int64(len(b))
-				} else {
-					log.Warn("cardity", "deploy", "invalid carc magic", "tx", txhash)
-				}
+				if hasCRAC(b) { sha = fmt.Sprintf("%x", sha256.Sum256(b)); size = int64(len(b)) } else { log.Warn("cardity","deploy","invalid carc magic","tx",txhash) }
 			}
 		} else if carcHex != "" {
 			if b, err := hex.DecodeString(strings.TrimPrefix(carcHex, "0x")); err == nil {
-				if hasCRAC(b) {
-					sha = fmt.Sprintf("%x", sha256.Sum256(b))
-					size = int64(len(b))
-				} else {
-					log.Warn("cardity", "deploy", "invalid carc magic", "tx", txhash)
-				}
+				if hasCRAC(b) { sha = fmt.Sprintf("%x", sha256.Sum256(b)); size = int64(len(b)) } else { log.Warn("cardity","deploy","invalid carc magic","tx",txhash) }
 			}
 		}
 		c := &models.CardityContract{
 			ContractId:   contractId,
 			Protocol:     env.Protocol,
 			Version:      env.Version,
-			AbiJSON:      abiText,
+			ContractRef:  contractRef,
+			AbiJSON:      abiJSON,
+			AbiHash:      abiHash,
+			AbiSourceType: abiSrc,
 			AbiCID:       env.AbiCID,
 			CarcSHA256:   sha,
 			Size:         size,
@@ -182,50 +251,18 @@ func (e *Explorer) executeCardity(txhash, blockHash string, height int64, rawJSO
 			BlockNumber:  height,
 			CreateDate:   now,
 		}
-		if err := e.dbc.SaveCardityContract(c); err != nil {
-			return fmt.Errorf("SaveCardityContract err: %v", err)
-		}
+		if err := e.dbc.SaveCardityContract(c); err != nil { return fmt.Errorf("SaveCardityContract err: %v", err) }
 		return nil
 	case "deploy_package":
-		pkg := &models.CardityPackage{
-			PackageId:    env.PackageId,
-			Version:      env.Version,
-			PackageABI:   string(env.Abi),
-			ModulesJSON:  string(env.Modules),
-			DeployTxHash: txhash,
-			BlockHash:    blockHash,
-			BlockNumber:  height,
-			CreateDate:   now,
-		}
-		if err := e.dbc.SaveCardityPackage(pkg); err != nil {
-			return fmt.Errorf("SaveCardityPackage err: %v", err)
-		}
+		pkg := &models.CardityPackage{ PackageId: env.PackageId, Version: env.Version, PackageABI: string(env.Abi), ModulesJSON: string(env.Modules), DeployTxHash: txhash, BlockHash: blockHash, BlockNumber: height, CreateDate: now }
+		if err := e.dbc.SaveCardityPackage(pkg); err != nil { return fmt.Errorf("SaveCardityPackage err: %v", err) }
 		return nil
 	case "deploy_part":
 		idx, total := 0, 0
-		if env.Idx != nil {
-			idx = *env.Idx
-		}
-		if env.Total != nil {
-			total = *env.Total
-		}
-		part := &models.CardityBundlePart{
-			BundleId:    env.BundleId,
-			Idx:         idx,
-			Total:       total,
-			PackageId:   env.PackageId,
-			Version:     env.Version,
-			ModuleName:  env.ModuleName,
-			AbiJSON:     string(env.Abi),
-			CarcB64:     env.CarcB64,
-			TxHash:      txhash,
-			BlockHash:   blockHash,
-			BlockNumber: height,
-			CreateDate:  now,
-		}
-		if err := e.dbc.SaveBundlePart(part); err != nil {
-			return fmt.Errorf("SaveBundlePart err: %v", err)
-		}
+		if env.Idx != nil { idx = *env.Idx }
+		if env.Total != nil { total = *env.Total }
+		part := &models.CardityBundlePart{ BundleId: env.BundleId, Idx: idx, Total: total, PackageId: env.PackageId, Version: env.Version, ModuleName: env.ModuleName, AbiJSON: string(env.Abi), CarcB64: env.CarcB64, TxHash: txhash, BlockHash: blockHash, BlockNumber: height, CreateDate: now }
+		if err := e.dbc.SaveBundlePart(part); err != nil { return fmt.Errorf("SaveBundlePart err: %v", err) }
 		if env.BundleId != "" {
 			parts, err := e.dbc.FindBundleParts(env.BundleId)
 			if err == nil && len(parts) > 0 && parts[0].Total > 0 && len(parts) == parts[0].Total {
@@ -238,54 +275,26 @@ func (e *Explorer) executeCardity(txhash, blockHash string, height int64, rawJSO
 								sha = fmt.Sprintf("%x", sha256.Sum256(b))
 								size = int64(len(b))
 							} else {
-								log.Warn("cardity", "deploy_part", "invalid carc magic", "tx", p.TxHash)
+								log.Warn("cardity","deploy_part","invalid carc magic","tx", p.TxHash)
 							}
 						}
 					}
-					_ = e.dbc.SaveCardityModule(&models.CardityModule{
-						PackageId:    p.PackageId,
-						Name:         p.ModuleName,
-						AbiJSON:      p.AbiJSON,
-						CarcB64:      p.CarcB64,
-						CarcSHA256:   sha,
-						Size:         size,
-						DeployTxHash: p.TxHash,
-						BlockHash:    p.BlockHash,
-						BlockNumber:  p.BlockNumber,
-						CreateDate:   p.CreateDate,
-					})
+					_ = e.dbc.SaveCardityModule(&models.CardityModule{ PackageId: p.PackageId, Name: p.ModuleName, AbiJSON: p.AbiJSON, CarcB64: p.CarcB64, CarcSHA256: sha, Size: size, DeployTxHash: p.TxHash, BlockHash: p.BlockHash, BlockNumber: p.BlockNumber, CreateDate: p.CreateDate })
 				}
 				_ = e.dbc.SaveCardityPackage(&models.CardityPackage{PackageId: env.PackageId, Version: env.Version})
 			}
 		}
 		return nil
-
 	case "invoke":
-		contractId := env.ContractId
-		if contractId == "" {
-			contractId = env.ContractRef
-		}
-		method := env.Method
-		if env.ModuleName != "" && !strings.Contains(method, ".") {
-			method = env.ModuleName + "." + method
-		}
-		fqn := method
-		inv := &models.CardityInvocationLog{
-			ContractId:  contractId,
-			Method:      method,
-			MethodFQN:   fqn,
-			ArgsJSON:    string(env.Args),
-			ArgsText:    truncate(string(env.Args), 240),
-			FromAddress: fromAddress,
-			TxHash:      txhash,
-			BlockHash:   blockHash,
-			BlockNumber: height,
-			CreateDate:  now,
-		}
-		if err := e.dbc.SaveCardityInvocation(inv); err != nil {
-			return fmt.Errorf("SaveCardityInvocation err: %v", err)
-		}
-		// M1: no runtime execution, events are optional and skipped
+		contractId := env.ContractId; if contractId == "" { contractId = env.ContractRef }
+		method := env.Method; if env.ModuleName != "" && !strings.Contains(method, ".") { method = env.ModuleName + "." + method }
+		inv := &models.CardityInvocationLog{ ContractId: contractId, Method: method, MethodFQN: method, ArgsJSON: string(env.Args), ArgsText: truncate(string(env.Args),240), FromAddress: fromAddress, TxHash: txhash, BlockHash: blockHash, BlockNumber: height, CreateDate: now }
+		if err := e.dbc.SaveCardityInvocation(inv); err != nil { return fmt.Errorf("SaveCardityInvocation err: %v", err) }
+		return nil
+	case "event":
+		// placeholder write
+		el := &models.CardityEventLog{ ContractId: env.ContractId, EventName: env.EventName, ParamsJSON: string(env.Params), TxHash: txhash, BlockHash: blockHash, BlockNumber: height, CreateDate: now }
+		_ = e.dbc.SaveCardityEvents([]*models.CardityEventLog{el})
 		return nil
 	default:
 		return fmt.Errorf("unsupported cardity op: %s", env.Op)

@@ -4,38 +4,41 @@ package models
 // This table stores the basic metadata and ABI reference so indexers and
 // applications can discover and introspect contracts generically.
 type CardityContract struct {
-	Id           int64  `json:"id" gorm:"primaryKey;autoIncrement"`
-	ContractId   string `json:"contract_id" gorm:"uniqueIndex"`
-	Protocol     string `json:"protocol" gorm:"index"`
-	Version      string `json:"version"`
-	AbiJSON      string `json:"abi_json" gorm:"type:text"`
-	AbiCID       string `json:"abi_cid"`
-	CarcHash     string `json:"carc_hash"`
-	CarcSHA256   string `json:"carc_sha256" gorm:"index"`
-	Size         int64  `json:"size"`
-	PackageId    string `json:"package_id" gorm:"index"`
-	ModuleName   string `json:"module_name" gorm:"index"`
-	DeployTxHash string `json:"deploy_tx_hash" gorm:"index"`
-	CarcIpfsPath string `json:"carc_ipfs_path" gorm:"type:varchar(512)"`
-	Creator      string `json:"creator" gorm:"index"`
-	BlockHash    string `json:"block_hash"`
-	BlockNumber  int64  `json:"block_number" gorm:"index"`
-	CreateDate   int64  `json:"create_date" gorm:"index"`
+	Id             int64  `json:"id" gorm:"primaryKey;autoIncrement"`
+	ContractId     string `json:"contract_id" gorm:"uniqueIndex"`
+	Protocol       string `json:"protocol" gorm:"index"`
+	Version        string `json:"version"`
+	ContractRef    string `json:"contract_ref" gorm:"index:idx_contract_ref_block,priority:1"`
+	AbiJSON        string `json:"abi_json" gorm:"type:text"`
+	AbiHash        string `json:"abi_hash" gorm:"type:char(64);index"`
+	AbiSourceType  string `json:"abi_source_type" gorm:"type:varchar(16)"`
+	AbiCID         string `json:"abi_cid"`
+	CarcHash       string `json:"carc_hash"`
+	CarcSHA256     string `json:"carc_sha256" gorm:"uniqueIndex"`
+	Size           int64  `json:"size"`
+	PackageId      string `json:"package_id" gorm:"index"`
+	ModuleName     string `json:"module_name" gorm:"index"`
+	DeployTxHash   string `json:"deploy_tx_hash" gorm:"index"`
+	CarcIpfsPath   string `json:"carc_ipfs_path" gorm:"type:varchar(512)"`
+	Creator        string `json:"creator" gorm:"index"`
+	BlockHash      string `json:"block_hash"`
+	BlockNumber    int64  `json:"block_number" gorm:"index;index:idx_contract_ref_block,priority:2"`
+	CreateDate     int64  `json:"create_date" gorm:"index"`
 }
 
 // CardityInvocationLog stores method invocations on a Cardity contract
 type CardityInvocationLog struct {
-	Id          int64  `json:"id" gorm:"primaryKey;autoIncrement"`
-	ContractId  string `json:"contract_id" gorm:"index,uniqueIndex:uniq_cardi_inv"`
-	Method      string `json:"method" gorm:"index,uniqueIndex:uniq_cardi_inv"`
-	MethodFQN   string `json:"method_fqn" gorm:"index"`
-	ArgsJSON    string `json:"args_json" gorm:"type:text"`
-	ArgsText    string `json:"args_text" gorm:"type:varchar(256);index"`
-	FromAddress string `json:"from_address" gorm:"index"`
-	TxHash      string `json:"tx_hash" gorm:"index,uniqueIndex:uniq_cardi_inv,uniqueIndex"`
-	BlockHash   string `json:"block_hash"`
-	BlockNumber int64  `json:"block_number" gorm:"index"`
-	CreateDate  int64  `json:"create_date" gorm:"index"`
+	Id           int64  `json:"id" gorm:"primaryKey;autoIncrement"`
+	ContractId   string `json:"contract_id" gorm:"index,uniqueIndex:uniq_cardi_inv;index:idx_inv_contract_method_block,priority:1"`
+	Method       string `json:"method" gorm:"index,uniqueIndex:uniq_cardi_inv"`
+	MethodFQN    string `json:"method_fqn" gorm:"index:idx_inv_contract_method_block,priority:2"`
+	ArgsJSON     string `json:"args_json" gorm:"type:text"`
+	ArgsText     string `json:"args_text" gorm:"type:varchar(256);index"`
+	FromAddress  string `json:"from_address" gorm:"index:idx_inv_from_block,priority:1"`
+	TxHash       string `json:"tx_hash" gorm:"index,uniqueIndex:uniq_cardi_inv,uniqueIndex"`
+	BlockHash    string `json:"block_hash"`
+	BlockNumber  int64  `json:"block_number" gorm:"index;index:idx_inv_contract_method_block,priority:3;index:idx_inv_from_block,priority:2"`
+	CreateDate   int64  `json:"create_date" gorm:"index"`
 }
 
 // CardityEventLog stores events emitted by a Cardity contract
@@ -112,17 +115,17 @@ type CardityModule struct {
 
 // CardityBundlePart stores sharded package deployment parts for reassembly
 type CardityBundlePart struct {
-	Id         int64  `json:"id" gorm:"primaryKey;autoIncrement"`
-	BundleId   string `json:"bundle_id" gorm:"index,uniqueIndex:uniq_bundle_idx"`
-	Idx        int    `json:"idx" gorm:"uniqueIndex:uniq_bundle_idx"`
-	Total      int    `json:"total"`
-	PackageId  string `json:"package_id"`
-	Version    string `json:"version"`
-	ModuleName string `json:"module_name"`
-	AbiJSON    string `json:"abi_json" gorm:"type:text"`
-	CarcB64    string `json:"carc_b64" gorm:"type:text"`
-	TxHash     string `json:"tx_hash" gorm:"index"`
-	BlockHash  string `json:"block_hash"`
-	BlockNumber int64 `json:"block_number" gorm:"index"`
-	CreateDate int64  `json:"create_date" gorm:"index"`
+	Id          int64  `json:"id" gorm:"primaryKey;autoIncrement"`
+	BundleId    string `json:"bundle_id" gorm:"index,uniqueIndex:uniq_bundle_idx"`
+	Idx         int    `json:"idx" gorm:"uniqueIndex:uniq_bundle_idx"`
+	Total       int    `json:"total"`
+	PackageId   string `json:"package_id"`
+	Version     string `json:"version"`
+	ModuleName  string `json:"module_name"`
+	AbiJSON     string `json:"abi_json" gorm:"type:text"`
+	CarcB64     string `json:"carc_b64" gorm:"type:text"`
+	TxHash      string `json:"tx_hash" gorm:"index"`
+	BlockHash   string `json:"block_hash"`
+	BlockNumber int64  `json:"block_number" gorm:"index"`
+	CreateDate  int64  `json:"create_date" gorm:"index"`
 }
