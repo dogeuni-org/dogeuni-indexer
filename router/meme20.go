@@ -212,7 +212,13 @@ func (r *Meme20Router) Collect(c *gin.Context) {
 	params := &struct {
 		HolderAddress string `json:"holder_address"`
 		TickId        string `json:"tick_id"`
-	}{}
+		SearchKey     string `json:"search_key"`
+		Limit         int    `json:"limit"`
+		OffSet        int    `json:"offset"`
+	}{
+		Limit:  10,
+		OffSet: 0,
+	}
 
 	if err := c.ShouldBindJSON(&params); err != nil {
 		result := &utils.HttpResult{}
@@ -236,6 +242,10 @@ func (r *Meme20Router) Collect(c *gin.Context) {
 		subQuery = subQuery.Where("di.tick_id = ?", params.TickId)
 	}
 
+	if params.SearchKey != "" {
+		subQuery = subQuery.Where("di.name like ? or di.tick_id like ? or di.tick like ?", "%"+params.SearchKey+"%", "%"+params.SearchKey+"%", "%"+params.SearchKey+"%")
+	}
+
 	if params.HolderAddress != "" {
 		subQuery = subQuery.Where("di.holder_address = ?", params.HolderAddress)
 	}
@@ -244,6 +254,8 @@ func (r *Meme20Router) Collect(c *gin.Context) {
 	err := subQuery.
 		Count(&total).
 		Order("di.create_date DESC").
+		Limit(params.Limit).
+		Offset(params.OffSet).
 		Scan(&results).Error
 
 	if err != nil {

@@ -52,7 +52,6 @@ func (r *SwapRouter) Order(c *gin.Context) {
 	filter := &models.SwapInfo{
 		OrderId:       params.OrderId,
 		Op:            params.Op,
-		Tick:          params.Tick,
 		TxHash:        params.TxHash,
 		HolderAddress: params.HolderAddress,
 		BlockNumber:   params.BlockNumber,
@@ -64,11 +63,12 @@ func (r *SwapRouter) Order(c *gin.Context) {
 
 	if params.Tick0 != "" && params.Tick1 != "" {
 		subQuery.Where("(tick0 = ? and tick1 = ?) or (tick1 = ? and tick0 = ?)", params.Tick0, params.Tick1, params.Tick0, params.Tick1)
+	} else if params.Tick != "" {
+		subQuery.Where("tick0 = ? or tick1 = ?", params.Tick, params.Tick)
 	} else {
 		filter = &models.SwapInfo{
 			OrderId:       params.OrderId,
 			Op:            params.Op,
-			Tick:          params.Tick,
 			Tick0:         params.Tick0,
 			Tick1:         params.Tick1,
 			TxHash:        params.TxHash,
@@ -103,8 +103,8 @@ func (r *SwapRouter) SwapLiquidity(c *gin.Context) {
 		Limit  int    `json:"limit"`
 		OffSet int    `json:"offset"`
 	}{
-		Limit:  -1,
-		OffSet: -1,
+		Limit:  1000,
+		OffSet: 0,
 	}
 
 	if err := c.ShouldBindJSON(&params); err != nil {
@@ -122,7 +122,7 @@ func (r *SwapRouter) SwapLiquidity(c *gin.Context) {
 
 	infos := make([]*models.SwapLiquidity, 0)
 	total := int64(0)
-	err := r.dbc.DB.Where(filter).Limit(params.Limit).Offset(params.OffSet).Find(&infos).Limit(-1).Offset(-1).Count(&total).Error
+	err := r.dbc.DB.Model(&models.SwapLiquidity{}).Where(filter).Count(&total).Limit(params.Limit).Offset(params.OffSet).Find(&infos).Error
 	if err != nil {
 		result := &utils.HttpResult{}
 		result.Code = 500
@@ -202,7 +202,6 @@ func (r *SwapRouter) SwapLiquidityHolder(c *gin.Context) {
 
 	var dbModels []*QueryResult
 	for _, res := range results {
-		println(res.Reserve0.String(), res.Reserve1.String(), res.Liquidity.String(), res.LiquidityTotal.String(), res.Tick)
 		dbModels = append(dbModels, &QueryResult{
 			Tick:           res.Tick0 + "-SWAP-" + res.Tick1,
 			Tick0:          res.Tick0,
@@ -280,7 +279,7 @@ func (r *SwapRouter) SwapK(c *gin.Context) {
 
 	p := &params{
 		DateInterval: "1d",
-		Limit:        1500,
+		Limit:        1000,
 		Offset:       0,
 	}
 
@@ -324,8 +323,8 @@ func (r *SwapRouter) SwapTvl(c *gin.Context) {
 	}
 
 	p := &params{
-		Limit:  -1,
-		OffSet: -1,
+		Limit:  1000,
+		OffSet: 0,
 	}
 
 	if err := c.ShouldBindJSON(&p); err != nil {
@@ -396,8 +395,8 @@ func (r *SwapRouter) SwapSummaryTvlTotal(c *gin.Context) {
 	}
 
 	p := &params{
-		Limit:  -1,
-		OffSet: -1,
+		Limit:  1000,
+		OffSet: 0,
 	}
 
 	if err := c.ShouldBindJSON(&p); err != nil {
@@ -439,9 +438,6 @@ func (r *SwapRouter) SwapSummaryTvlTotal(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-type T struct {
-}
-
 func (r *SwapRouter) SwapSummary(c *gin.Context) {
 	type params struct {
 		Tick   string `json:"tick"`
@@ -450,8 +446,8 @@ func (r *SwapRouter) SwapSummary(c *gin.Context) {
 	}
 
 	p := &params{
-		Limit:  -1,
-		OffSet: -1,
+		Limit:  100,
+		OffSet: 0,
 	}
 
 	if err := c.ShouldBindJSON(&p); err != nil {
@@ -499,7 +495,7 @@ func (r *SwapRouter) SwapSummary(c *gin.Context) {
 		COALESCE(e.open_price, 0) AS open_price,
         COALESCE(e.close_price, 0) AS last_price,
         COALESCE(CASE WHEN e.last_date != ? THEN 0 ELSE e.base_volume END, 0) AS base_volume,
-        (SELECT COUNT(holder_address) FROM drc20_collect_address WHERE drc20_collect_address.tick = d20i.tick) AS holders,
+        (SELECT COUNT(holder_address) FROM drc20_collect_address WHERE drc20_collect_address.tick = d20i.tick  and amt_sum != '0') AS holders,
         COALESCE(e.lowest_ask, 0) AS foot_price,
 		e.last_date,
         d20i.logo,
@@ -508,20 +504,24 @@ func (r *SwapRouter) SwapSummary(c *gin.Context) {
 		//Where("LENGTH(d20i.tick) < 9").
 		Order("base_volume DESC, holders DESC")
 
-	// Apply pagination
-	mainQuery = mainQuery.Limit(p.Limit).Offset(p.OffSet)
-
 	if p.Tick != "" {
 		mainQuery = mainQuery.Where("d20i.tick = ?", p.Tick)
 	}
 
-	err := mainQuery.Count(&totalCount).Scan(&results).Error
+	err := mainQuery.Count(&totalCount).Limit(p.Limit).Offset(p.OffSet).Scan(&results).Error
 	if err != nil {
 		result := &utils.HttpResult{}
 		result.Code = 500
 		result.Msg = err.Error()
 		c.JSON(http.StatusInternalServerError, result)
 		return
+	}
+
+	for i := 0; i < len(results); i++ {
+		if results[i].LastDate != startDate.Format(layout) {
+			results[i].LastPrice = results[i].OpenPrice
+			results[i].BaseVolume = 0
+		}
 	}
 
 	result := &utils.HttpResult{}
@@ -542,7 +542,7 @@ func (r *SwapRouter) SwapPair(c *gin.Context) {
 
 	p := &params{
 		Limit:  10,
-		OffSet: -1,
+		OffSet: 0,
 	}
 
 	if err := c.ShouldBindJSON(&p); err != nil {
@@ -591,10 +591,10 @@ func (r *SwapRouter) SwapPair(c *gin.Context) {
 		Joins("LEFT JOIN swap_liquidity sl ON es.tick = sl.tick").
 		Order("es.liquidity DESC")
 
-	mainQuery = mainQuery.Limit(p.Limit).Offset(p.OffSet)
+	mainQuery = mainQuery
 
 	var totalCount int64
-	mainQuery.Count(&totalCount).Scan(&results)
+	mainQuery.Count(&totalCount).Limit(p.Limit).Offset(p.OffSet).Scan(&results)
 
 	result := &utils.HttpResult{
 		Code:  200,

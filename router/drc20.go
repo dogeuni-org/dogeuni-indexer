@@ -214,7 +214,13 @@ func (r *Drc20Router) Collect(c *gin.Context) {
 	params := &struct {
 		HolderAddress string `json:"holder_address"`
 		Tick          string `json:"tick"`
-	}{}
+		SearchKey     string `json:"search_key"`
+		Limit         int    `json:"limit"`
+		OffSet        int    `json:"offset"`
+	}{
+		Limit:  10,
+		OffSet: 0,
+	}
 
 	if err := c.ShouldBindJSON(&params); err != nil {
 		result := &utils.HttpResult{}
@@ -226,7 +232,7 @@ func (r *Drc20Router) Collect(c *gin.Context) {
 
 	maxHeight := 0
 	err := r.dbc.DB.Model(&models.Block{}).Select("max(block_number)").Scan(&maxHeight).Error
-	if params.Tick == "" && params.HolderAddress == "" {
+	if params.Tick == "" && params.HolderAddress == "" && params.Limit > 200 {
 		if cacheDrc20CollectAll != nil && cacheDrc20CollectAll.CacheNumber == int64(maxHeight) {
 			result := &utils.HttpResult{}
 			result.Code = 200
@@ -248,6 +254,33 @@ func (r *Drc20Router) Collect(c *gin.Context) {
 		subQuery = subQuery.Where("di.tick = ?", params.Tick)
 	}
 
+	if params.SearchKey != "" {
+
+		subQuery = subQuery.Where("di.tick like ?", "%"+params.SearchKey+"%")
+		total := int64(0)
+		err = subQuery.
+			Count(&total).
+			Order("di.tick asc").
+			Scan(&results).Error
+
+		if err != nil {
+			result := &utils.HttpResult{}
+			result.Code = 500
+			result.Msg = "server error"
+			c.JSON(http.StatusInternalServerError, result)
+			return
+		}
+
+		result := &utils.HttpResult{}
+		result.Code = 200
+		result.Msg = "success"
+		result.Data = results
+		result.Total = total
+
+		c.JSON(http.StatusOK, result)
+		return
+	}
+
 	if params.HolderAddress != "" {
 		subQuery = subQuery.Where("di.holder_address = ?", params.HolderAddress)
 	}
@@ -256,6 +289,8 @@ func (r *Drc20Router) Collect(c *gin.Context) {
 	err = subQuery.
 		Count(&total).
 		Order("di.create_date DESC").
+		Limit(params.Limit).
+		Offset(params.OffSet).
 		Scan(&results).Error
 
 	if err != nil {
@@ -283,9 +318,11 @@ func (r *Drc20Router) Collect(c *gin.Context) {
 		}
 	}
 
-	cacheDrc20CollectAll = &models.Drc20CollectCache{
-		CacheNumber: int64(maxHeight),
-		Results:     results,
+	if params.Tick == "" && params.HolderAddress == "" {
+		cacheDrc20CollectAll = &models.Drc20CollectCache{
+			CacheNumber: int64(maxHeight),
+			Results:     results,
+		}
 	}
 
 	result := &utils.HttpResult{}

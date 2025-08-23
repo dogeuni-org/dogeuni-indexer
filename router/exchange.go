@@ -132,7 +132,7 @@ func (r *ExchangeRouter) Order(c *gin.Context) {
 		subQuery = subQuery.Where("( tick0 = ? or tick1 = ?)", p.Tick, p.Tick)
 	}
 
-	err := subQuery.Count(&total).Limit(p.Limit).Offset(p.OffSet).Find(&infos).Error
+	err := subQuery.Count(&total).Order("id desc").Limit(p.Limit).Offset(p.OffSet).Find(&infos).Error
 	if err != nil {
 		result := &utils.HttpResult{}
 		result.Code = 500

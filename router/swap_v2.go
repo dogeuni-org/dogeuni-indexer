@@ -174,7 +174,8 @@ func (r *SwapV2Router) SwapLiquidityHolder(c *gin.Context) {
 	subQuery := r.dbc.DB.Table("meme20_collect_address dca").
 		Select("sl.pair_id, dca.amt, dca.holder_address, sl.liquidity_total, sl.amt0, sl.amt1, sl.tick0, sl.tick0_id, sl.tick1, sl.tick1_id").
 		Joins("left join swap_v2_liquidity sl on sl.pair_id = dca.tick_id").
-		Where("sl.pair_id != ''")
+		Where("sl.pair_id != ''").
+		Where("dca.amt != '0'")
 
 	if params.HolderAddress != "" {
 		subQuery = subQuery.Where("dca.holder_address = ?", params.HolderAddress)
@@ -193,7 +194,9 @@ func (r *SwapV2Router) SwapLiquidityHolder(c *gin.Context) {
 	}
 
 	err := subQuery.
-		Count(&total).Limit(params.Limit).Offset(params.OffSet).Scan(&results).Error
+		Count(&total).
+		Order("CAST(dca.amt AS DECIMAL(64,0)) DESC").
+		Limit(params.Limit).Offset(params.OffSet).Scan(&results).Error
 
 	if err != nil {
 		result := &utils.HttpResult{}

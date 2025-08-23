@@ -105,7 +105,8 @@ func (e *Explorer) exchangeTrade(ex *models.ExchangeInfo) error {
 		return err
 	}
 
-	err = tx.Model(&models.ExchangeInfo{}).Where("tx_hash = ?", ex.TxHash).Updates(map[string]interface{}{"order_status": 0, "tick0": ex.Tick0, "tick1": ex.Tick1, "amt0": ex.Amt1.String()}).Error
+
+	err = tx.Model(&models.ExchangeInfo{}).Where("tx_hash = ?", ex.TxHash).Updates(map[string]interface{}{"order_status": 0, "tick0": ex.Tick0, "tick1": ex.Tick1, "amt1": ex.Amt1.String()}).Error
 	if err != nil {
 		tx.Rollback()
 		return fmt.Errorf("update status err: %s", err.Error())

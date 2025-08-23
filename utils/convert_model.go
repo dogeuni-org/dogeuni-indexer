@@ -412,3 +412,21 @@ func ConvertInvite(inscription *models.InviteInscription) (*models.InviteInfo, e
 
 	return card, nil
 }
+
+func ConvertConsensus(inscription *models.ConsensusInscription) (*models.ConsensusInfo, error) {
+	consensus := &models.ConsensusInfo{
+		P:  inscription.P,
+		Op: inscription.Op,
+	}
+
+	var err error
+	consensus.Amt, err = ConvertStringToNumber(inscription.Amt)
+	if err != nil {
+		return nil, err
+	}
+
+
+    consensus.StakeId = inscription.StakeId
+
+	return consensus, nil
+}

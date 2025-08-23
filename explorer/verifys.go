@@ -31,6 +31,49 @@ func NewVerifys(dbc *storage.DBClient) *Verifys {
 	}
 }
 
+func (v *Verifys) VerifyConsensus(c *models.ConsensusInfo) error {
+	switch c.Op {
+	case "stake":
+		return v.verifyConsensusStake(c)
+	case "unstake":
+		return v.verifyConsensusUnstake(c)
+	default:
+		return fmt.Errorf("do not support the type of consensus op")
+	}
+}
+
+func (v *Verifys) verifyConsensusStake(c *models.ConsensusInfo) error {
+	if c.HolderAddress == "" {
+		return fmt.Errorf("consensus verify: holder address required")
+	}
+	if c.StakeId == "" {
+		c.StakeId = c.TxHash
+	}
+	// Pre-stake validation: check if CARDI balance is sufficient
+	holder := &models.Drc20CollectAddress{}
+	if err := v.dbc.DB.Where("tick = ? and holder_address = ?", "CARDI", c.HolderAddress).First(holder).Error; err != nil {
+		return fmt.Errorf("the contract does not exist err %s", err.Error())
+	}
+	if c.Amt.Int().Cmp(holder.AmtSum.Int()) > 0 {
+		return fmt.Errorf("the amount of tokens exceeds the balance")
+	}
+	return nil
+}
+
+func (v *Verifys) verifyConsensusUnstake(c *models.ConsensusInfo) error {
+	if c.StakeId == "" {
+		return fmt.Errorf("consensus verify: stake_id required")
+	}
+	rec := &models.ConsensusStakeRecord{}
+	if err := v.dbc.DB.Where("stake_id = ? AND status = ?", c.StakeId, "active").First(rec).Error; err != nil {
+		return fmt.Errorf("consensus verify: %v", err)
+	}
+	if rec.HolderAddress != c.HolderAddress {
+		return fmt.Errorf("consensus verify: holder address mismatch")
+	}
+	return nil
+}
+
 func (v *Verifys) VerifyDrc20(card *models.Drc20Info) error {
 	switch card.Op {
 	case "deploy":
@@ -257,7 +300,7 @@ func (v *Verifys) verifySwapAdd(tx *gorm.DB, swap *models.SwapInfo) error {
 
 func (v *Verifys) verifySwapExec(tx *gorm.DB, swap *models.SwapInfo) error {
 
-	if swap.Amt0.Int().Cmp(Number0) < 1 || swap.Amt1.Int().Cmp(Number0) < 1 {
+	if swap.Amt0.Int().Cmp(Number0) < 1 || swap.Amt1Min.Int().Cmp(Number0) < 0 {
 		return fmt.Errorf("the amount of tokens exceeds the 0")
 	}
 

@@ -78,12 +78,12 @@ func (Meme20CollectAddress) TableName() string {
 }
 
 type Meme20Revert struct {
-	ID          uint   `gorm:"primarykey" json:"id"`
-	FromAddress string `json:"from_address"`
-	ToAddress   string `json:"to_address"`
-	TickId      string `json:"tick_id"`
-	//Tick        string    `json:"tick"`
-	//Name        string    `json:"name"`
+	ID          uint      `gorm:"primarykey" json:"id"`
+	FromAddress string    `json:"from_address"`
+	ToAddress   string    `json:"to_address"`
+	TickId      string    `json:"tick_id"`
+	Tick        string    `gorm:"column:tick; ->" json:"tick"`
+	Name        string    `gorm:"column:name; ->" json:"name"`
 	Amt         *Number   `json:"amt"`
 	TxHash      string    `json:"tx_hash"`
 	BlockNumber int64     `json:"block_number"`

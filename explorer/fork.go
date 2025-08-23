@@ -143,6 +143,12 @@ func (e *Explorer) fork(tx *gorm.DB, height int64) error {
 		return err
 	}
 
+    // consensus
+    err = e.consensusFork(tx, height)
+    if err != nil {
+        return err
+    }
+
 	err = e.delRevert(tx, height)
 	if err != nil {
 		return err
@@ -303,6 +309,11 @@ func (e *Explorer) delRevert(tx *gorm.DB, height int64) error {
 	if err != nil {
 		return fmt.Errorf("DeleteInviteRevert error: %v", err)
 	}
+
+    err = tx.Where("block_number > ?", height).Delete(&models.ConsensusRevert{}).Error
+    if err != nil {
+        return fmt.Errorf("DeleteConsensusRevert error: %v", err)
+    }
 
 	err = tx.Where("block_number > ?", height).Delete(&models.PumpInviteRewardRevert{}).Error
 	if err != nil {

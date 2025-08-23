@@ -48,6 +48,7 @@ type SwapV2Liquidity struct {
 	Amt0            *Number `json:"amt0"`
 	Amt1            *Number `json:"amt1"`
 	LiquidityTotal  *Number `json:"liquidity_total"`
+	ClosePrice      float64 `json:"close_price"`
 	ReservesAddress string  `json:"reserves_address"`
 	HolderAddress   string  `json:"holder_address"`
 }

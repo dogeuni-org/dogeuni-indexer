@@ -170,3 +170,10 @@ type InviteInscription struct {
 	Op            string `json:"op"`
 	InviteAddress string `json:"invite_address"`
 }
+
+type ConsensusInscription struct {
+    P       string `json:"p"`        
+    Op      string `json:"op"`      
+    Amt     string `json:"amt"`      
+    StakeId string `json:"stake_id"`
+}

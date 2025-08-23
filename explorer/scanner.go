@@ -285,6 +285,19 @@ func (e *Explorer) scan() error {
 					continue
 				}
 
+			case "consensus":
+				consensus, err := e.consensusDecode(txv, pushedData, e.currentHeight)
+				if err != nil {
+					log.Error("scanning", "consensusDecode", err, "txhash", txv.Txid)
+					continue
+				}
+
+				err = e.executeConsensus(consensus)
+				if err != nil {
+					e.dbc.DB.Model(&models.ConsensusInfo{}).Where("tx_hash = ?", consensus.TxHash).Update("err_info", err.Error())
+					continue
+				}
+
 			case "pump":
 
 				pump, err := e.pumpDecode(txv, pushedData, e.currentHeight)
@@ -331,6 +344,22 @@ func (e *Explorer) scan() error {
 		log.Info("explorer", "scanning end ", e.currentHeight)
 	}
 	return nil
+}
+
+func (e *Explorer) executeConsensus(consensus *models.ConsensusInfo) error {
+    // Basic validation handled by VerifyConsensus
+    if err := e.verify.VerifyConsensus(consensus); err != nil {
+       return fmt.Errorf("VerifyConsensus err: %s", err.Error())
+    }
+
+    switch consensus.Op {
+    case "stake":
+        return e.consensusStake(consensus)
+    case "unstake":
+        return e.consensusUnstake(consensus)
+    default:
+        return fmt.Errorf("unknown operation: %s", consensus.Op)
+    }
 }
 
 func (e *Explorer) executeDrc20(drc20 *models.Drc20Info) error {

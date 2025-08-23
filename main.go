@@ -268,6 +268,11 @@ func main() {
 			v4.POST("/invite/collect", inviteRouter.Collect)
 			v4.POST("/invite/pump-reword", inviteRouter.PumpReward)
 			v4.POST("/invite/pump-reword-total", inviteRouter.PumpRewardTotal)
+			// consensus
+			consensusRouter := router.NewConsensusRouter(dbClient, rpcClient)
+			v4.POST("/consensus/order", consensusRouter.Order)
+			v4.POST("/consensus/records", consensusRouter.Records)
+			v4.POST("/consensus/score", consensusRouter.Score)
 		}
 
 		err := grt.Run(cfg.HttpServer.Server)
