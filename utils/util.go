@@ -263,3 +263,9 @@ func IntervalToSecond(dateInterval string) int64 {
 		return 0
 	}
 }
+
+// CalculateSHA256 calculates SHA256 hash of a string
+func CalculateSHA256(data string) string {
+	hash := sha256.Sum256([]byte(data))
+	return fmt.Sprintf("%x", hash[:])
+}

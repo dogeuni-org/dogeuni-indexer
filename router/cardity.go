@@ -17,15 +17,37 @@ func NewCardityRouter(db *storage.DBClient) *CardityRouter {
 	return &CardityRouter{dbc: db}
 }
 
-// ABI by contract id
+// ABI by contract id (if developer has shared it)
+// Note: ABI is a compile-time artifact, not required for contract functionality
 func (r *CardityRouter) ABI(c *gin.Context) {
 	id := c.Param("id")
 	m := &models.CardityContract{}
 	if err := r.dbc.DB.Where("contract_id = ?", id).First(m).Error; err != nil {
-		c.JSON(http.StatusOK, gin.H{"code": 404, "msg": "not found", "data": nil, "total": 0})
+		c.JSON(http.StatusOK, gin.H{"code": 404, "msg": "contract not found", "data": nil, "total": 0})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"code": 200, "msg": "success", "data": gin.H{"abi_json": m.AbiJSON, "abi_hash": m.AbiHash}, "total": 1})
+	
+	if m.AbiJSON == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"code": 404, 
+			"msg": "ABI not available for this contract", 
+			"data": nil, 
+			"total": 0,
+			"note": "ABI is a compile-time artifact that developers manage locally. Index service only handles on-chain data.",
+		})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"code": 200, 
+		"msg": "success", 
+		"data": gin.H{
+			"abi_json": m.AbiJSON, 
+			"abi_hash": m.AbiHash,
+			"note": "ABI found in database (if previously stored)",
+		}, 
+		"total": 1,
+	})
 }
 
 // Contracts list with enhanced filters
@@ -113,10 +135,11 @@ func (r *CardityRouter) Invocations(c *gin.Context) {
 	if p.ContractId != "" {
 		q = q.Where("contract_id = ?", p.ContractId)
 	}
+	if p.Method != "" {
+		q = q.Where("method = ?", p.Method)
+	}
 	if p.MethodFQN != "" {
 		q = q.Where("method_fqn = ?", p.MethodFQN)
-	} else if p.Method != "" {
-		q = q.Where("method = ?", p.Method)
 	}
 	if p.FromAddress != "" {
 		q = q.Where("from_address = ?", p.FromAddress)
@@ -293,4 +316,108 @@ func (r *CardityRouter) ModulesByPackage(c *gin.Context) {
 	list := make([]*models.CardityModule, 0)
 	_ = q.Order("block_number desc, id desc").Find(&list).Error
 	c.JSON(http.StatusOK, gin.H{"code": 200, "msg": "success", "data": list, "total": total})
+}
+
+// SearchByABI allows searching contracts by ABI content for better discovery
+// Note: ABI is used to query index content, not uploaded to index
+func (r *CardityRouter) SearchByABI(c *gin.Context) {
+	type req struct {
+		AbiHash     string `json:"abi_hash"`
+		MethodName  string `json:"method_name"` // Search contracts with specific method
+		EventName   string `json:"event_name"`  // Search contracts with specific event
+		Limit       int    `json:"limit"`
+		Offset      int    `json:"offset"`
+	}
+	
+	var p req
+	_ = c.ShouldBindJSON(&p)
+	if p.Limit <= 0 || p.Limit > 100 {
+		p.Limit = 20
+	}
+	
+	q := r.dbc.DB.Model(&models.CardityContract{})
+	
+	if p.AbiHash != "" {
+		q = q.Where("abi_hash = ?", p.AbiHash)
+	}
+	
+	if p.MethodName != "" {
+		// Search in ABI JSON for method names (only if ABI exists)
+		q = q.Where("abi_json LIKE ? AND abi_json != ''", "%"+p.MethodName+"%")
+	}
+	
+	if p.EventName != "" {
+		// Search in ABI JSON for event names (only if ABI exists)
+		q = q.Where("abi_json LIKE ? AND abi_json != ''", "%"+p.EventName+"%")
+	}
+	
+	var total int64
+	_ = q.Count(&total).Error
+	
+	results := make([]*models.CardityContract, 0)
+	_ = q.Offset(p.Offset).Limit(p.Limit).Order("block_number desc, id desc").Find(&results).Error
+	
+	c.JSON(http.StatusOK, gin.H{
+		"code": 200, 
+		"msg": "success", 
+		"data": results, 
+		"total": total,
+		"filters": gin.H{
+			"abi_hash":    p.AbiHash,
+			"method_name": p.MethodName,
+			"event_name":  p.EventName,
+		},
+		"note": "ABI search helps discover contracts by their interface. ABI is used to query index content.",
+	})
+}
+
+// GetABIStats returns statistics about ABI coverage for discovery purposes
+// Note: ABI helps users discover and interact with contracts
+func (r *CardityRouter) GetABIStats(c *gin.Context) {
+	var stats struct {
+		TotalContracts int64 `json:"total_contracts"`
+		WithABI        int64 `json:"with_abi"`
+		WithoutABI     int64 `json:"without_abi"`
+		AbiCoverage    float64 `json:"abi_coverage"`
+		BySourceType   map[string]int64 `json:"by_source_type"`
+		Note           string `json:"note"`
+	}
+	
+	// Total contracts
+	r.dbc.DB.Model(&models.CardityContract{}).Count(&stats.TotalContracts)
+	
+	// Contracts with ABI (for discovery)
+	r.dbc.DB.Model(&models.CardityContract{}).Where("abi_json != '' AND abi_json IS NOT NULL").Count(&stats.WithABI)
+	
+	// Contracts without ABI (normal case)
+	stats.WithoutABI = stats.TotalContracts - stats.WithABI
+	
+	// Calculate coverage percentage
+	if stats.TotalContracts > 0 {
+		stats.AbiCoverage = float64(stats.WithABI) / float64(stats.TotalContracts) * 100
+	}
+	
+	// By source type
+	stats.BySourceType = make(map[string]int64)
+	var sourceTypes []struct {
+		SourceType string `json:"source_type"`
+		Count      int64  `json:"count"`
+	}
+	r.dbc.DB.Model(&models.CardityContract{}).
+		Select("abi_source_type, count(*) as count").
+		Where("abi_source_type != '' AND abi_source_type IS NOT NULL").
+		Group("abi_source_type").
+		Find(&sourceTypes)
+	
+	for _, st := range sourceTypes {
+		stats.BySourceType[st.SourceType] = st.Count
+	}
+	
+	stats.Note = "ABI helps users discover and interact with contracts. Coverage shows contracts with discoverable interfaces."
+	
+	c.JSON(http.StatusOK, gin.H{
+		"code": 200, 
+		"msg": "success", 
+		"data": stats,
+	})
 }
