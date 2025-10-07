@@ -167,7 +167,7 @@ func (r *PumpRouter) MergeOrder(c *gin.Context) {
 
 	total0 := int64(0)
 	total1 := int64(0)
-	// 两个需要加起来
+	// Both need to be added together
 
 	subQuery := r.dbc.DB.Table("pump_info")
 	if params.TickId != "" {
@@ -286,9 +286,9 @@ func (r *PumpRouter) Board(c *gin.Context) {
 	}
 
 	//OrderBy
-	// 1. 交易量
-	// 2. 时间排序
-	// 3. 价格排序
+	// 1. Trading volume
+	// 2. Time sorting
+	// 3. Price sorting
 	infos := make([]*PumpBoard, 0)
 	total := int64(0)
 	startDate := time.Now()
@@ -401,13 +401,13 @@ func (r *PumpRouter) K(c *gin.Context) {
 		return
 	}
 
-	// 获取最新区块的时间戳
+	// Get latest block timestamp
 	//blockCount, _ := r.node.GetBlockCount()
 	//block, _ := r.node.GetBlockHash(blockCount)
 	//blockInfo, _ := r.node.GetBlockVerboseBool(block)
 	tnow := time.Now().Unix()
 
-	// 如果 results 是0 个， 那么获取最后一条
+	// If results is 0, get the last one
 	if len(results) == 0 {
 		summ := &models.Summary{}
 		err = r.dbc.DB.Table("swap_v2_summary").Where("tick_id = ? and date_interval = ? and time_stamp <= ?", p.TickId, p.DateInterval, p.From).Order("id desc").First(&summ).Error
@@ -462,7 +462,7 @@ func (r *PumpRouter) K(c *gin.Context) {
 		return
 	}
 
-	// 根据时间间隔没有的补上
+	// Fill in missing data based on time intervals
 	results1 := make([]models.Summary, 0)
 	time_stamp := int64(0)
 	summ0 := models.Summary{}

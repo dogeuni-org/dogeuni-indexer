@@ -21,7 +21,7 @@ func NewConsensusRouter(dbc *storage.DBClient, node *rpcclient.Client) *Consensu
 	return &ConsensusRouter{dbc: dbc, node: node}
 }
 
-// Order 查询共识订单（consensus_info）
+// Order queries consensus orders (consensus_info)
 func (r *ConsensusRouter) Order(c *gin.Context) {
 	type params struct {
 		OrderId       string `json:"order_id"`
@@ -61,11 +61,11 @@ func (r *ConsensusRouter) Order(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// Records 查询独立质押记录（consensus_stake_record）
+// Records queries independent stake records (consensus_stake_record)
 func (r *ConsensusRouter) Records(c *gin.Context) {
 	type params struct {
 		HolderAddress string `json:"holder_address"`
-		Status        string `json:"status"` // active/closed，可选
+		Status        string `json:"status"` // active/closed, optional
 		Limit         int    `json:"limit"`
 		OffSet        int    `json:"offset"`
 	}
@@ -98,7 +98,7 @@ func (r *ConsensusRouter) Records(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// Score 计算单笔记录当前积分（含衰减）
+// Score calculates current score for a single record (including decay)
 func (r *ConsensusRouter) Score(c *gin.Context) {
 	type params struct {
 		StakeId      string  `json:"stake_id"`
@@ -108,7 +108,7 @@ func (r *ConsensusRouter) Score(c *gin.Context) {
 		Beta         float64 `json:"beta"`
 	}
 
-	p := &params{BlocksPerDay: 1440, Lambda: 0.15, Beta: 0.2}
+	p := &params{BlocksPerDay: 1440, Lambda: 0.15, Beta: 0.1}
 	if err := c.ShouldBindJSON(p); err != nil {
 		result := &utils.HttpResult{Code: 500, Msg: err.Error()}
 		c.JSON(http.StatusBadRequest, result)
@@ -120,7 +120,7 @@ func (r *ConsensusRouter) Score(c *gin.Context) {
 		return
 	}
 
-	// 若未传当前高度，则从节点获取最新高度
+	// If current block height not provided, get latest height from node
 	if p.CurrentBlock == 0 {
 		bc, err := r.node.GetBlockCount()
 		if err != nil {
@@ -145,7 +145,7 @@ func (r *ConsensusRouter) Score(c *gin.Context) {
 		score = r.dbc.GetConsensusRecordDecayedScore(rec, p.CurrentBlock, p.BlocksPerDay, p.Lambda, p.Beta)
 	}
 
-	// 返回整数积分
+	// Return integer score
 	result := &utils.HttpResult{Code: 200, Msg: "success", Data: map[string]interface{}{
 		"stake_id": p.StakeId,
 		"score":    score.String(),

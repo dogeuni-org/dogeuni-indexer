@@ -156,7 +156,7 @@ func (db *DBClient) SwapAdd(tx *gorm.DB, swap *models.SwapInfo) error {
 		return err
 	}
 
-	// 更新 amt0
+	// Update amt0
 	err = db.UpdateLiquidity(tx, swap.Tick)
 	if err != nil {
 		tx.Rollback()

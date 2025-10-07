@@ -210,11 +210,11 @@ func (e *DBClient) CalculateConsensusScore(amt *models.Number, stakeBlock, endBl
 	return e.CalculateConsensusScoreByBlocks(amt, endBlock-stakeBlock)
 }
 
-// 积分相关的复杂函数已废弃，改用“解押结算：score = amt × 持有区块数”的简单口径
+// Complex score-related functions deprecated, replaced with simple formula: "unstake settlement: score = amt × held blocks"
 
-// CalculateConsensusDecayedScore 计算解锁后的积分衰减值（按区块）
-// 公式：Score(t) = Score0 × [β + (1 − β) × e^(−λ × t)]
-// t 按区块计；λ、β 为参数（推荐 λ=0.1, β=0.2）
+// CalculateConsensusDecayedScore calculates score decay value after unlock (by blocks)
+// Formula: Score(t) = Score0 × [β + (1 − β) × e^(−λ × t)]
+// t counted by blocks; λ, β are parameters (recommended λ=0.1, β=0.2)
 func (e *DBClient) CalculateConsensusDecayedScore(score0 *big.Int, tBlocks int64, lambda float64, beta float64) *big.Int {
 	if score0 == nil || score0.Sign() <= 0 {
 		return big.NewInt(0)
@@ -229,19 +229,19 @@ func (e *DBClient) CalculateConsensusDecayedScore(score0 *big.Int, tBlocks int64
 		beta = 1
 	}
 
-	// 使用定点数计算衰减因子
+	// Use fixed-point arithmetic to calculate decay factor
 	const SCALE int64 = 1_000_000_000 // 1e9
 	decay := beta + (1.0-beta)*math.Exp(-lambda*float64(tBlocks))
 	decayScaled := int64(decay * float64(SCALE))
 
-	// 计算衰减后的积分：score0 * decay
+	// Calculate decayed score: score0 * decay
 	result := new(big.Int).Mul(score0, big.NewInt(decayScaled))
 	result.Quo(result, big.NewInt(SCALE))
 
 	return result
 }
 
-// CalculateConsensusDecayedScoreByBlocks 基于区块差计算衰减值（t 为区块数）
+// CalculateConsensusDecayedScoreByBlocks calculates decay value based on block difference (t is block count)
 func (e *DBClient) CalculateConsensusDecayedScoreByBlocks(score0 *big.Int, unstakeBlock, currentBlock int64, blocksPerDay int64, lambda float64, beta float64) *big.Int {
 	tBlocks := currentBlock - unstakeBlock
 	if tBlocks < 0 {
@@ -250,8 +250,8 @@ func (e *DBClient) CalculateConsensusDecayedScoreByBlocks(score0 *big.Int, unsta
 	return e.CalculateConsensusDecayedScore(score0, tBlocks, lambda, beta)
 }
 
-// GetConsensusRecordDecayedScore 基于单笔质押记录，计算当前衰减后的积分
-// 仅对 status=closed 的记录生效；active 记录返回 0（尚未解锁）
+// GetConsensusRecordDecayedScore calculates current decayed score based on single stake record
+// Only effective for status=closed records; active records return 0 (not yet unlocked)
 func (e *DBClient) GetConsensusRecordDecayedScore(record *models.ConsensusStakeRecord, currentBlock int64, blocksPerDay int64, lambda float64, beta float64) *big.Int {
 	if record == nil || record.Status != "closed" || record.UnstakeBlock == nil || record.Score == nil {
 		return big.NewInt(0)

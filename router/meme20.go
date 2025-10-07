@@ -144,7 +144,7 @@ func (r *Meme20Router) History(c *gin.Context) {
 
 }
 
-// 查询地址下的所有nft
+// Query all NFTs under an address
 func (r *Meme20Router) CollectAddress(c *gin.Context) {
 	params := &struct {
 		TickId        string `json:"tick_id"`

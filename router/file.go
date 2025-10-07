@@ -517,7 +517,7 @@ func (r *FileRouter) UploadInscriptionsMeta(c *gin.Context) {
 			return
 		}
 
-		// 删除之前对于图片的描述
+		// Delete previous image descriptions
 		err = r.dbc.DB.Where("name = ? and meta_id = ?", item.Meta.Name, params.MetaId).Delete(&models.FileMetaAttribute{}).Error
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
