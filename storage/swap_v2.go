@@ -448,7 +448,7 @@ func (db *DBClient) UpdateV2LiquidityFork(tx *gorm.DB) error {
 					FROM drc20_collect_address b
 					WHERE 
 						swap_v2_liquidity.tick0_id = b.tick AND 
-						swap_v2_liquidity.reserves_address = b.holder_address AND 
+						swap_v2_liquidity.reserves_address = b.holder_address
 				)`).Error
 	if err != nil {
 		return fmt.Errorf("UpdateLiquidity error: %s", err.Error())
@@ -467,7 +467,7 @@ func (db *DBClient) UpdateV2LiquidityFork(tx *gorm.DB) error {
 					FROM meme20_collect_address b
 					WHERE 
 						swap_v2_liquidity.tick0_id = b.tick_id AND 
-						swap_v2_liquidity.reserves_address = b.holder_address AND 
+						swap_v2_liquidity.reserves_address = b.holder_address
 				)`).Error
 	if err != nil {
 		return fmt.Errorf("UpdateLiquidity error: %s", err.Error())
@@ -487,7 +487,7 @@ func (db *DBClient) UpdateV2LiquidityFork(tx *gorm.DB) error {
 					FROM drc20_collect_address b
 					WHERE 
 						swap_v2_liquidity.tick1_id = b.tick AND 
-						swap_v2_liquidity.reserves_address = b.holder_address AND 
+						swap_v2_liquidity.reserves_address = b.holder_address
 				)`).Error
 	if err != nil {
 		return err
@@ -506,7 +506,7 @@ func (db *DBClient) UpdateV2LiquidityFork(tx *gorm.DB) error {
 					FROM meme20_collect_address b
 					WHERE 
 						swap_v2_liquidity.tick1_id = b.tick_id AND 
-						swap_v2_liquidity.reserves_address = b.holder_address AND 
+						swap_v2_liquidity.reserves_address = b.holder_address
 				)`).Error
 	if err != nil {
 		return err
