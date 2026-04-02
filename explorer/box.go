@@ -135,7 +135,9 @@ func (e *Explorer) boxFork(tx *gorm.DB, height int64) error {
 	log.Info("fork", "box", height)
 
 	// box
-	err := tx.Exec("update box_collect a, drc20_collect_address b set a.liqamt_finish = b.amt_sum where a.tick1 = b.tick and a.reserves_address = b.holder_address").Error
+	err := tx.Exec(`UPDATE box_collect AS a SET liqamt_finish = b.amt_sum
+		FROM drc20_collect_address AS b
+		WHERE a.tick1 = b.tick AND a.reserves_address = b.holder_address`).Error
 	if err != nil {
 		return fmt.Errorf("update box_collect error: %v", err)
 	}
