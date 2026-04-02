@@ -224,7 +224,7 @@ func (e *Explorer) swapFork(tx *gorm.DB, height int64) error {
 
 	log.Info("fork", "swap", height)
 	var swapReverts []*models.SwapRevert
-	err := tx.Model(&models.StakeRevert{}).
+	err := tx.Model(&models.SwapRevert{}).
 		Where("block_number > ?", height).
 		Order("id desc").
 		Find(&swapReverts).Error

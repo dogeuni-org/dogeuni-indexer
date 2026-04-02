@@ -239,7 +239,7 @@ func (e *Explorer) swapV2Exec(db *gorm.DB, swap *models.SwapV2Info) error {
 func (e *Explorer) swapV2Fork(tx *gorm.DB, height int64) error {
 	log.Info("fork", "swap_v2", height)
 	var reverts []*models.SwapV2Revert
-	err := tx.Model(&models.StakeRevert{}).
+	err := tx.Model(&models.SwapV2Revert{}).
 		Where("block_number > ?", height).
 		Order("id desc").
 		Find(&reverts).Error
