@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"dogeuni-indexer/models"
 	"dogeuni-indexer/utils"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
@@ -45,6 +46,11 @@ func NewSqliteClient(cfg utils.SqliteConfig) *DBClient {
 
 	_ = db.Exec("PRAGMA journal_mode=WAL;")
 
+	if err := db.AutoMigrate(&models.StakeV2Revert{}); err != nil {
+		fmt.Printf("AutoMigrate stake_v2_revert failed, err:%v  ", err)
+		os.Exit(0)
+	}
+
 	sqlDB, dbError := db.DB()
 	if dbError != nil {
 		fmt.Printf("get db failed,err:%v  ", dbError)
@@ -81,6 +87,11 @@ func NewMysqlClient(cfg utils.MysqlConfig) *DBClient {
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: newLogger})
 	if err != nil {
 		fmt.Printf("Open failed,err:%v  ", err)
+		os.Exit(0)
+	}
+
+	if err := db.AutoMigrate(&models.StakeV2Revert{}); err != nil {
+		fmt.Printf("AutoMigrate stake_v2_revert failed, err:%v  ", err)
 		os.Exit(0)
 	}
 
