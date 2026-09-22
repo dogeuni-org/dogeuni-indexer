@@ -17,6 +17,10 @@ import (
 
 func (e *Explorer) boxDecode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.BoxInfo, error) {
 
+	if err := e.dropPending(&models.BoxInfo{}, tx.Hash); err != nil {
+		return nil, err
+	}
+
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Hash).First(&models.BoxInfo{}).Error
 	if err == nil {
 		return nil, fmt.Errorf("box already exist %s", tx.Hash)

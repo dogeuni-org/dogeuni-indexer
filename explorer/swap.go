@@ -16,6 +16,10 @@ import (
 
 func (e *Explorer) swapRouterDecode(tx *btcjson.TxRawResult, height int64) ([]*models.SwapInfo, error) {
 
+	if err := e.dropPending(&models.SwapInfo{}, tx.Hash); err != nil {
+		return nil, err
+	}
+
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Hash).First(&models.SwapInfo{}).Error
 	if err == nil {
 		return nil, fmt.Errorf("swap already exist %s", tx.Hash)

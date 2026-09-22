@@ -1,7 +1,9 @@
 package explorer
 
 import (
+	"database/sql/driver"
 	"dogeuni-indexer/models"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -58,12 +60,16 @@ func TestDecodeDedup(t *testing.T) {
 		t.Fatalf("want non-retryable duplicate error, got %v", err)
 	}
 
-	// a failing dedup lookup is a storage problem, not a duplicate
-	sqlDB, _ := e.dbc.DB.DB()
-	sqlDB.Close()
+	// a failing dedup lookup is a database fault, not a duplicate: the scanner aborts the block
+	on := true
+	injectQueryFault(t, e, &on)
 	_, err = e.drc20Decode(mintTx(), []byte(mintJSON), 1)
-	if err == nil || !retryable(err) {
-		t.Fatalf("want retryable storage error, got %v", err)
+	on = false
+	if err == nil {
+		t.Fatal("want dedup error under query fault")
+	}
+	if fault := e.fault.Take(); !errors.Is(fault, driver.ErrBadConn) {
+		t.Fatalf("dedup fault not recorded, got %v", fault)
 	}
 }
 

@@ -15,6 +15,10 @@ import (
 
 func (e *Explorer) crossDecode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.CrossInfo, error) {
 
+	if err := e.dropPending(&models.CrossInfo{}, tx.Txid); err != nil {
+		return nil, err
+	}
+
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Txid).First(&models.CrossInfo{}).Error
 	if err == nil {
 		return nil, fmt.Errorf("cross already exist %s", tx.Txid)

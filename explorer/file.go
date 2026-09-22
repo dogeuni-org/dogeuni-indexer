@@ -16,6 +16,10 @@ import (
 
 func (e *Explorer) fileDecode(tx *btcjson.TxRawResult, number int64) (*models.FileInfo, error) {
 
+	if err := e.dropPending(&models.FileInfo{}, tx.Hash); err != nil {
+		return nil, err
+	}
+
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Hash).First(&models.FileInfo{}).Error
 	if err == nil {
 		return nil, fmt.Errorf("file already exist %s", tx.Hash)

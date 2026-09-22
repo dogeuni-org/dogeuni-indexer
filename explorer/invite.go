@@ -16,6 +16,10 @@ import (
 // invite
 func (e *Explorer) inviteDecode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.InviteInfo, error) {
 
+	if err := e.dropPending(&models.InviteInfo{}, tx.Hash); err != nil {
+		return nil, err
+	}
+
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Hash).First(&models.InviteInfo{}).Error
 	if err == nil {
 		return nil, fmt.Errorf("InviteInfo already exist %s", tx.Hash)
