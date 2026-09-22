@@ -60,7 +60,7 @@ func main() {
 	ipfs := shell.NewShell(cfg.Ipfs)
 
 	if cfg.Explorer.Switch {
-		exp := explorer.NewExplorer(ctx, wg, rpcClient, dbClient, ipfs, cfg.Explorer.FromBlock)
+		exp := explorer.NewExplorer(ctx, wg, rpcClient, dbClient, ipfs, cfg.Explorer)
 		wg.Add(1)
 		go exp.Start()
 	}
