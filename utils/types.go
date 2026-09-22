@@ -43,6 +43,9 @@ type ExplorerConfig struct {
 	FromBlock    int64 `json:"from_block"`
 	InitMintData bool  `json:"init_mint_data"`
 	InitForkData bool  `json:"init_fork_data"`
+	// Activation heights for protocols that were not indexed historically; 0 keeps the protocol disabled
+	StakeV2Height int64 `json:"stake_v2_height"`
+	NftHeight     int64 `json:"nft_height"`
 }
 
 type HttpResult struct {

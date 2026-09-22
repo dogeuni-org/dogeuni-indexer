@@ -84,6 +84,7 @@ func (NftCollectAddress) TableName() string {
 
 type NftRevert struct {
 	ID          uint   `gorm:"primarykey"`
+	Op          string `json:"op"`
 	Tick        string `json:"tick"`
 	TickId      int64  `json:"tick_id"`
 	FromAddress string `json:"from_address"`

@@ -143,6 +143,11 @@ func (e *Explorer) fork(tx *gorm.DB, height int64) error {
 		return err
 	}
 
+	err = e.nftFork(tx, height)
+	if err != nil {
+		return err
+	}
+
     // consensus
     err = e.consensusFork(tx, height)
     if err != nil {
@@ -180,6 +185,11 @@ func (e *Explorer) delInfo(tx *gorm.DB, height int64) error {
 	err = tx.Where("block_number > ?", height).Delete(&models.NftInfo{}).Error
 	if err != nil {
 		return fmt.Errorf("DeleteNftInfo error: %v", err)
+	}
+
+	err = tx.Where("block_number > ?", height).Delete(&models.StakeV2Info{}).Error
+	if err != nil {
+		return fmt.Errorf("DeleteStakeV2Info error: %v", err)
 	}
 
 	err = tx.Where("block_number > ?", height).Delete(&models.BoxInfo{}).Error
@@ -263,6 +273,16 @@ func (e *Explorer) delRevert(tx *gorm.DB, height int64) error {
 	err = tx.Where("block_number > ?", height).Delete(&models.FileRevert{}).Error
 	if err != nil {
 		return fmt.Errorf("DeleteFileRevert error: %v", err)
+	}
+
+	err = tx.Where("block_number > ?", height).Delete(&models.StakeV2Revert{}).Error
+	if err != nil {
+		return fmt.Errorf("DeleteStakeV2Revert error: %v", err)
+	}
+
+	err = tx.Where("block_number > ?", height).Delete(&models.NftRevert{}).Error
+	if err != nil {
+		return fmt.Errorf("DeleteNftRevert error: %v", err)
 	}
 
 	err = tx.Where("block_number > ?", height).Delete(&models.ExchangeRevert{}).Error

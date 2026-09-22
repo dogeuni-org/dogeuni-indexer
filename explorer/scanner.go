@@ -5,6 +5,7 @@ import (
 	"dogeuni-indexer/config"
 	"dogeuni-indexer/models"
 	"dogeuni-indexer/storage"
+	"dogeuni-indexer/utils"
 	"errors"
 	"fmt"
 	"github.com/dogecoinw/doged/chaincfg/chainhash"
@@ -39,18 +40,22 @@ type Explorer struct {
 	ipfs          *shell.Shell
 	verify        *Verifys
 	currentHeight int64
+	stakeV2Height int64
+	nftHeight     int64
 
 	ctx context.Context
 	wg  *sync.WaitGroup
 }
 
-func NewExplorer(ctx context.Context, wg *sync.WaitGroup, rpcClient *rpcclient.Client, dbc *storage.DBClient, ipfs *shell.Shell, currentHeight int64) *Explorer {
+func NewExplorer(ctx context.Context, wg *sync.WaitGroup, rpcClient *rpcclient.Client, dbc *storage.DBClient, ipfs *shell.Shell, cfg utils.ExplorerConfig) *Explorer {
 	exp := &Explorer{
 		node:          rpcClient,
 		dbc:           dbc,
 		ipfs:          ipfs,
 		verify:        NewVerifys(dbc),
-		currentHeight: currentHeight,
+		currentHeight: cfg.FromBlock,
+		stakeV2Height: cfg.StakeV2Height,
+		nftHeight:     cfg.NftHeight,
 		ctx:           ctx,
 		wg:            wg,
 	}
@@ -326,6 +331,42 @@ func (e *Explorer) scan() error {
 					continue
 				}
 
+			case "stake-v2":
+				if !activated(e.stakeV2Height, e.currentHeight) {
+					log.Trace("scanning", "stake-v2", "not activated", "txhash", txv.Txid)
+					continue
+				}
+
+				stake, err := e.stakeV2Decode(txv, pushedData, e.currentHeight)
+				if err != nil {
+					log.Error("scanning", "stakeV2Decode", err, "txhash", txv.Txid)
+					continue
+				}
+
+				err = e.executeStakeV2(stake)
+				if err != nil {
+					e.dbc.DB.Model(&models.StakeV2Info{}).Where("tx_hash = ?", stake.TxHash).Update("err_info", err.Error())
+					continue
+				}
+
+			case "nft/ai":
+				if !activated(e.nftHeight, e.currentHeight) {
+					log.Trace("scanning", "nft/ai", "not activated", "txhash", txv.Txid)
+					continue
+				}
+
+				nft, err := e.nftDecode(txv, e.currentHeight)
+				if err != nil {
+					log.Error("scanning", "nftDecode", err, "txhash", txv.Txid)
+					continue
+				}
+
+				err = e.executeNft(nft)
+				if err != nil {
+					e.dbc.DB.Model(&models.NftInfo{}).Where("tx_hash = ?", nft.TxHash).Update("err_info", err.Error())
+					continue
+				}
+
 			default:
 				log.Error("scanning", "op", "not found", "txhash", txv.Txid)
 			}
@@ -496,6 +537,35 @@ func (e *Explorer) executeStakeV1(stake *models.StakeInfo) error {
 		if err != nil {
 			return fmt.Errorf("stakeGetAllReward err: %s", err.Error())
 		}
+	}
+
+	return nil
+}
+
+// activated reports whether a height-gated protocol is live at height; activation 0 means disabled
+func activated(activation, height int64) bool {
+	return activation > 0 && height >= activation
+}
+
+func (e *Explorer) executeStakeV2(stake *models.StakeV2Info) error {
+
+	err := e.verify.VerifyStakeV2(stake)
+	if err != nil {
+		return fmt.Errorf("VerifyStakeV2 err: %s", err.Error())
+	}
+
+	switch stake.Op {
+	case "create":
+		err = e.stakeV2Create(stake)
+	case "stake":
+		err = e.stakeV2Stake(stake)
+	case "unstake":
+		err = e.stakeV2UnStake(stake)
+	case "getreward":
+		err = e.stakeV2GetReward(stake)
+	}
+	if err != nil {
+		return fmt.Errorf("stakeV2 %s err: %s", stake.Op, err.Error())
 	}
 
 	return nil

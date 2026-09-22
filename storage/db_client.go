@@ -46,8 +46,8 @@ func NewSqliteClient(cfg utils.SqliteConfig) *DBClient {
 
 	_ = db.Exec("PRAGMA journal_mode=WAL;")
 
-	if err := db.AutoMigrate(&models.StakeV2Revert{}); err != nil {
-		fmt.Printf("AutoMigrate stake_v2_revert failed, err:%v  ", err)
+	if err := db.AutoMigrate(&models.StakeV2Info{}, &models.StakeV2Collect{}, &models.StakeV2CollectAddress{}, &models.StakeV2Revert{}, &models.NftRevert{}); err != nil {
+		fmt.Printf("AutoMigrate stake_v2/nft_revert failed, err:%v  ", err)
 		os.Exit(0)
 	}
 
@@ -90,8 +90,8 @@ func NewMysqlClient(cfg utils.MysqlConfig) *DBClient {
 		os.Exit(0)
 	}
 
-	if err := db.AutoMigrate(&models.StakeV2Revert{}); err != nil {
-		fmt.Printf("AutoMigrate stake_v2_revert failed, err:%v  ", err)
+	if err := db.AutoMigrate(&models.StakeV2Info{}, &models.StakeV2Collect{}, &models.StakeV2CollectAddress{}, &models.StakeV2Revert{}, &models.NftRevert{}); err != nil {
+		fmt.Printf("AutoMigrate stake_v2/nft_revert failed, err:%v  ", err)
 		os.Exit(0)
 	}
 

@@ -188,3 +188,51 @@ func (e *Explorer) nftTransfer(nft *models.NftInfo) error {
 
 	return nil
 }
+
+func (e *Explorer) nftFork(tx *gorm.DB, height int64) error {
+	log.Info("fork", "nft", height)
+
+	var nftReverts []*models.NftRevert
+	err := tx.Model(&models.NftRevert{}).
+		Where("block_number > ?", height).
+		Order("id desc").
+		Find(&nftReverts).Error
+	if err != nil {
+		return fmt.Errorf("FindNftRevert error: %v", err)
+	}
+
+	for _, revert := range nftReverts {
+		switch revert.Op {
+		case "deploy":
+			err = tx.Where("tick = ?", revert.Tick).Delete(&models.NftCollect{}).Error
+			if err != nil {
+				return fmt.Errorf("nftFork deploy error: %v", err)
+			}
+
+		case "mint":
+			err = tx.Where("tick = ? AND tick_id = ?", revert.Tick, revert.TickId).Delete(&models.NftCollectAddress{}).Error
+			if err != nil {
+				return fmt.Errorf("nftFork mint error: %v", err)
+			}
+
+			err = tx.Model(&models.NftCollect{}).Where("tick = ?", revert.Tick).Updates(map[string]interface{}{
+				"transactions": gorm.Expr("transactions - 1"),
+				"tick_sum":     gorm.Expr("tick_sum - 1"),
+			}).Error
+			if err != nil {
+				return fmt.Errorf("nftFork mint collect error: %v", err)
+			}
+
+		case "transfer":
+			err = e.dbc.TransferNft(tx, revert.Tick, revert.ToAddress, revert.FromAddress, revert.TickId, height, true)
+			if err != nil {
+				return fmt.Errorf("nftFork transfer error: %v", err)
+			}
+
+		default:
+			return fmt.Errorf("nftFork unknown op %q id %d", revert.Op, revert.ID)
+		}
+	}
+
+	return nil
+}
