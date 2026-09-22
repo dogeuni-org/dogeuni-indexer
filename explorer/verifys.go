@@ -244,6 +244,12 @@ func (v *Verifys) verifySwapAdd(tx *gorm.DB, swap *models.SwapInfo) error {
 		return fmt.Errorf("the contract does not exist err %s", err.Error())
 	}
 
+	// A pool whose reserves were drained (11 such pools exist on mainnet) cannot price
+	// an add: the optimal amounts below divide by the reserves.
+	if !hasReserves(swapLiquidity.Amt0, swapLiquidity.Amt1) {
+		return fmt.Errorf("the pool has no liquidity")
+	}
+
 	cardA0 := &models.Drc20CollectAddress{}
 	err = tx.Where("tick = ? and holder_address = ?", tick0, swap.HolderAddress).First(cardA0).Error
 	if err != nil {
@@ -1154,6 +1160,12 @@ func (v *Verifys) verifySwapV2Add(tx *gorm.DB, swap *models.SwapV2Info) error {
 		return fmt.Errorf("the contract does not exist err %s", err.Error())
 	}
 
+	// A pool whose reserves were drained (11 such pools exist on mainnet) cannot price
+	// an add: the optimal amounts below divide by the reserves.
+	if !hasReserves(swapLiquidity.Amt0, swapLiquidity.Amt1) {
+		return fmt.Errorf("the pool has no liquidity")
+	}
+
 	sum0 := models.NewNumber(0)
 	sum1 := models.NewNumber(0)
 
@@ -1435,4 +1447,9 @@ func (v *Verifys) verifyInviteDeploy(invite *models.InviteInfo) error {
 	}
 
 	return nil
+}
+
+// hasReserves reports whether both reserves of a pool are set and positive.
+func hasReserves(amt0, amt1 *models.Number) bool {
+	return amt0 != nil && amt1 != nil && amt0.Int().Sign() > 0 && amt1.Int().Sign() > 0
 }
