@@ -235,7 +235,11 @@ func TestMintDeploy(t *testing.T) {
 	out0 := wire.NewTxOut(baseAmount*repeat, toAddrByte)
 	redeemTx.AddTxOut(out0)
 
-	decodedAddrFee, _ := btcutil.DecodeAddress("feeAddress", &chaincfg.MainNetParams)
+	// drc-20 mint has no protocol fee address; pay the service fee back to the signer's own P2PKH address
+	decodedAddrFee, err := btcutil.NewAddressPubKeyHash(btcutil.Hash160(wif.PrivKey.PubKey().SerializeCompressed()), &chaincfg.MainNetParams)
+	if err != nil {
+		log.Fatal(err)
+	}
 	destinationAddrByteFee, err := txscript.PayToAddrScript(decodedAddrFee)
 	if err != nil {
 		log.Fatal(err)
@@ -452,16 +456,28 @@ func TestWdoge(t *testing.T) {
 	redeemTxOut := wire.NewTxOut(baseAmount, destinationAddrByte)
 	redeemTx.AddTxOut(redeemTxOut)
 
-	decodedAddrCool, _ := btcutil.DecodeAddress(wdogeCoolAddress, &chaincfg.MainNetParams)
-	destinationAddrByteCool, _ := txscript.PayToAddrScript(decodedAddrCool)
+	decodedAddrCool, err := btcutil.DecodeAddress(wdogeCoolAddress, &chaincfg.MainNetParams)
+	if err != nil {
+		log.Fatal(err)
+	}
+	destinationAddrByteCool, err := txscript.PayToAddrScript(decodedAddrCool)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// The quantity must be consistent with the inscription
 	redeemTxOutCool := wire.NewTxOut(amt, destinationAddrByteCool)
 	redeemTx.AddTxOut(redeemTxOutCool)
 
 	// charge handling fee
-	wFee, _ := btcutil.DecodeAddress(wdogeFeeAddress, &chaincfg.MainNetParams)
-	wByteFee, _ := txscript.PayToAddrScript(wFee)
+	wFee, err := btcutil.DecodeAddress(wdogeFeeAddress, &chaincfg.MainNetParams)
+	if err != nil {
+		log.Fatal(err)
+	}
+	wByteFee, err := txscript.PayToAddrScript(wFee)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	fee := int64(0)
 	if amt*3/1000 < 50000000 {
