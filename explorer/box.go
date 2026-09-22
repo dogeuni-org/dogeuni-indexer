@@ -18,8 +18,11 @@ import (
 func (e *Explorer) boxDecode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.BoxInfo, error) {
 
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Hash).First(&models.BoxInfo{}).Error
+	if err == nil {
+		return nil, fmt.Errorf("box already exist %s", tx.Hash)
+	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, fmt.Errorf("box already exist or err %s", tx.Hash)
+		return nil, fmt.Errorf("%w: dedup: %v", STORAGE_ERR, err)
 	}
 
 	param := &models.BoxInscription{}
@@ -44,29 +47,37 @@ func (e *Explorer) boxDecode(tx *btcjson.TxRawResult, pushedData []byte, number 
 		return nil, fmt.Errorf("vout length is not enough")
 	}
 
-	box.HolderAddress = tx.Vout[0].ScriptPubKey.Addresses[0]
+	box.HolderAddress, err = outputAddress(tx, 0)
+	if err != nil {
+		return nil, err
+	}
 
 	txHashIn, _ := chainhash.NewHashFromStr(tx.Vin[0].Txid)
 	txRawResult0, err := e.node.GetRawTransactionVerboseBool(txHashIn)
 	if err != nil {
-		return nil, CHAIN_NETWORK_ERR
+		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 	}
 
-	box.FeeAddress = txRawResult0.Vout[tx.Vin[0].Vout].ScriptPubKey.Addresses[0]
+	box.FeeAddress, err = outputAddress(txRawResult0, int(tx.Vin[0].Vout))
+	if err != nil {
+		return nil, err
+	}
 
 	txHashIn1, _ := chainhash.NewHashFromStr(txRawResult0.Vin[0].Txid)
 	txRawResult1, err := e.node.GetRawTransactionVerboseBool(txHashIn1)
 	if err != nil {
-		return nil, CHAIN_NETWORK_ERR
+		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 	}
 
-	if box.HolderAddress != txRawResult1.Vout[txRawResult0.Vin[0].Vout].ScriptPubKey.Addresses[0] {
+	if addr, err := outputAddress(txRawResult1, int(txRawResult0.Vin[0].Vout)); err != nil {
+		return nil, err
+	} else if box.HolderAddress != addr {
 		return nil, fmt.Errorf("the address is not the same as the previous transaction")
 	}
 
 	err = e.dbc.DB.Save(box).Error
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: save inscription: %v", STORAGE_ERR, err)
 	}
 
 	return box, nil

@@ -489,6 +489,20 @@ func (db *DBClient) BoxDeployScheduled(tx *gorm.DB, height int64) error {
 
 	for _, bc := range bcs {
 		if bc.LiqAmtFinish.Int().Cmp(big.NewInt(0)) > 0 {
+			// a block is scanned again after a node/storage error; refund marks the box is_del,
+			// finish leaves only its revert row (pair stored sorted), so skip a finish already done
+			var done int64
+			err = tx.Model(&models.BoxRevert{}).
+				Where("op = ? AND block_number = ? AND ((tick0 = ? AND tick1 = ?) OR (tick0 = ? AND tick1 = ?))",
+					"finish", height, bc.Tick0, bc.Tick1, bc.Tick1, bc.Tick0).
+				Count(&done).Error
+			if err != nil {
+				return err
+			}
+			if done > 0 {
+				continue
+			}
+
 			err = db.BoxFinish(tx, bc, height)
 			if err != nil {
 				return err

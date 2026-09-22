@@ -19,8 +19,11 @@ import (
 func (e *Explorer) fileExchangeDecode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.FileExchangeInfo, error) {
 
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Hash).First(&models.FileExchangeInfo{}).Error
+	if err == nil {
+		return nil, fmt.Errorf("file-exchange already exist %s", tx.Hash)
+	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, fmt.Errorf("file-exchange already exist or err %s", tx.Hash)
+		return nil, fmt.Errorf("%w: dedup: %v", STORAGE_ERR, err)
 	}
 
 	param := &models.FileExchangeInscription{}
@@ -43,7 +46,10 @@ func (e *Explorer) fileExchangeDecode(tx *btcjson.TxRawResult, pushedData []byte
 	ex.UpdateDate = models.LocalTime(time.Now().Unix())
 	ex.CreateDate = models.LocalTime(time.Now().Unix())
 
-	ex.HolderAddress = tx.Vout[0].ScriptPubKey.Addresses[0]
+	ex.HolderAddress, err = outputAddress(tx, 0)
+	if err != nil {
+		return nil, err
+	}
 	if ex.Op == "create" {
 		ex.ExId = tx.Hash
 	}
@@ -75,24 +81,29 @@ func (e *Explorer) fileExchangeDecode(tx *btcjson.TxRawResult, pushedData []byte
 	txhash0, _ := chainhash.NewHashFromStr(tx.Vin[0].Txid)
 	txRawResult0, err := e.node.GetRawTransactionVerboseBool(txhash0)
 	if err != nil {
-		return nil, CHAIN_NETWORK_ERR
+		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 	}
 
-	ex.FeeAddress = txRawResult0.Vout[tx.Vin[0].Vout].ScriptPubKey.Addresses[0]
+	ex.FeeAddress, err = outputAddress(txRawResult0, int(tx.Vin[0].Vout))
+	if err != nil {
+		return nil, err
+	}
 
 	txhash1, _ := chainhash.NewHashFromStr(txRawResult0.Vin[0].Txid)
 	txRawResult1, err := e.node.GetRawTransactionVerboseBool(txhash1)
 	if err != nil {
-		return nil, CHAIN_NETWORK_ERR
+		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 	}
 
-	if ex.HolderAddress != txRawResult1.Vout[txRawResult0.Vin[0].Vout].ScriptPubKey.Addresses[0] {
+	if addr, err := outputAddress(txRawResult1, int(txRawResult0.Vin[0].Vout)); err != nil {
+		return nil, err
+	} else if ex.HolderAddress != addr {
 		return nil, fmt.Errorf("the address is not the same as the previous transaction")
 	}
 
 	err = e.dbc.DB.Create(ex).Error
 	if err != nil {
-		return nil, fmt.Errorf("InstallFileExchangeInfo err: %s", err.Error())
+		return nil, fmt.Errorf("%w: save inscription: %v", STORAGE_ERR, err)
 	}
 
 	return ex, nil

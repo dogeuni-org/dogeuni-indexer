@@ -17,8 +17,11 @@ import (
 func (e *Explorer) fileDecode(tx *btcjson.TxRawResult, number int64) (*models.FileInfo, error) {
 
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Hash).First(&models.FileInfo{}).Error
+	if err == nil {
+		return nil, fmt.Errorf("file already exist %s", tx.Hash)
+	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, fmt.Errorf("file already exist or err %s", tx.Hash)
+		return nil, fmt.Errorf("%w: dedup: %v", STORAGE_ERR, err)
 	}
 
 	inscription, err := e.reDecodeFile(tx)
@@ -43,7 +46,10 @@ func (e *Explorer) fileDecode(tx *btcjson.TxRawResult, number int64) (*models.Fi
 
 	if file.Op == "deploy" {
 		file.FileId = tx.Hash
-		file.HolderAddress = tx.Vout[0].ScriptPubKey.Addresses[0]
+		file.HolderAddress, err = outputAddress(tx, 0)
+		if err != nil {
+			return nil, err
+		}
 		if tx.Vout[0].Value != 0.001 {
 			return nil, fmt.Errorf("The amount of tokens exceeds the 0.0001")
 		}
@@ -52,7 +58,7 @@ func (e *Explorer) fileDecode(tx *btcjson.TxRawResult, number int64) (*models.Fi
 	txHash0, _ := chainhash.NewHashFromStr(tx.Vin[0].Txid)
 	txRawResult0, err := e.node.GetRawTransactionVerboseBool(txHash0)
 	if err != nil {
-		return nil, fmt.Errorf("GetRawTransactionVerboseBool err: %s", err.Error())
+		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 	}
 
 	if file.Op == "transfer" {
@@ -60,11 +66,17 @@ func (e *Explorer) fileDecode(tx *btcjson.TxRawResult, number int64) (*models.Fi
 		txhash1, _ := chainhash.NewHashFromStr(txRawResult0.Vin[0].Txid)
 		txRawResult1, err := e.node.GetRawTransactionVerboseBool(txhash1)
 		if err != nil {
-			return nil, fmt.Errorf("getRawTransactionVerboseBool err: %s", err.Error())
+			return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 		}
 
-		file.HolderAddress = txRawResult1.Vout[txRawResult0.Vin[0].Vout].ScriptPubKey.Addresses[0]
-		file.ToAddress = tx.Vout[0].ScriptPubKey.Addresses[0]
+		file.HolderAddress, err = outputAddress(txRawResult1, int(txRawResult0.Vin[0].Vout))
+		if err != nil {
+			return nil, err
+		}
+		file.ToAddress, err = outputAddress(tx, 0)
+		if err != nil {
+			return nil, err
+		}
 
 		if file.HolderAddress == file.ToAddress {
 			return nil, errors.New("the address is the same")
@@ -81,7 +93,7 @@ func (e *Explorer) fileDecode(tx *btcjson.TxRawResult, number int64) (*models.Fi
 
 	err = e.dbc.DB.Create(file).Error
 	if err != nil {
-		return nil, fmt.Errorf("CreateFileInfo err: %s", err.Error())
+		return nil, fmt.Errorf("%w: save inscription: %v", STORAGE_ERR, err)
 	}
 
 	return file, nil

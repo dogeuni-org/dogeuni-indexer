@@ -22,8 +22,11 @@ const (
 func (e *Explorer) pumpDecode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.PumpInfo, error) {
 
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Hash).First(&models.PumpInfo{}).Error
+	if err == nil {
+		return nil, fmt.Errorf("pump already exist %s", tx.Hash)
+	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, fmt.Errorf("pump already exist or err %s", tx.Hash)
+		return nil, fmt.Errorf("%w: dedup: %v", STORAGE_ERR, err)
 	}
 
 	dogeDepositAmt := big.NewInt(0)
@@ -63,7 +66,10 @@ func (e *Explorer) pumpDecode(tx *btcjson.TxRawResult, pushedData []byte, number
 	pump.BlockHash = tx.BlockHash
 	pump.BlockNumber = number
 	pump.BlockTime = tx.Blocktime
-	pump.HolderAddress = tx.Vout[0].ScriptPubKey.Addresses[0]
+	pump.HolderAddress, err = outputAddress(tx, 0)
+	if err != nil {
+		return nil, err
+	}
 	pump.OrderStatus = 1
 
 	if pump.Op == "deploy" {
@@ -77,7 +83,9 @@ func (e *Explorer) pumpDecode(tx *btcjson.TxRawResult, pushedData []byte, number
 				return nil, fmt.Errorf("the amount of tokens is incorrect %f %s", tx.Vout[1].Value, utils.Float64ToBigInt(tx.Vout[3].Value*100000000).String())
 			}
 
-			if tx.Vout[3].ScriptPubKey.Addresses[0] != pumpCreateFeeAddress {
+			if addr, err := outputAddress(tx, 3); err != nil {
+				return nil, err
+			} else if addr != pumpCreateFeeAddress {
 				return nil, fmt.Errorf("the address is incorrect")
 			}
 
@@ -85,7 +93,9 @@ func (e *Explorer) pumpDecode(tx *btcjson.TxRawResult, pushedData []byte, number
 				return nil, fmt.Errorf("the amount of tokens is incorrect fee %f", tx.Vout[4].Value)
 			}
 
-			if tx.Vout[4].ScriptPubKey.Addresses[0] != pumpTipAddress {
+			if addr, err := outputAddress(tx, 4); err != nil {
+				return nil, err
+			} else if addr != pumpTipAddress {
 				return nil, fmt.Errorf("the address is incorrect")
 			}
 
@@ -98,7 +108,9 @@ func (e *Explorer) pumpDecode(tx *btcjson.TxRawResult, pushedData []byte, number
 				return nil, fmt.Errorf("the amount of tokens is incorrect %f %s", tx.Vout[1].Value, utils.Float64ToBigInt(tx.Vout[1].Value*100000000).String())
 			}
 
-			if tx.Vout[1].ScriptPubKey.Addresses[0] != pumpCreateFeeAddress {
+			if addr, err := outputAddress(tx, 1); err != nil {
+				return nil, err
+			} else if addr != pumpCreateFeeAddress {
 				return nil, fmt.Errorf("the address is incorrect")
 			}
 
@@ -106,7 +118,9 @@ func (e *Explorer) pumpDecode(tx *btcjson.TxRawResult, pushedData []byte, number
 				return nil, fmt.Errorf("the amount of tokens is incorrect fee %f", tx.Vout[2].Value)
 			}
 
-			if tx.Vout[2].ScriptPubKey.Addresses[0] != pumpTipAddress {
+			if addr, err := outputAddress(tx, 2); err != nil {
+				return nil, err
+			} else if addr != pumpTipAddress {
 				return nil, fmt.Errorf("the address is incorrect")
 			}
 		}
@@ -123,7 +137,9 @@ func (e *Explorer) pumpDecode(tx *btcjson.TxRawResult, pushedData []byte, number
 				return nil, fmt.Errorf("the amount of tokens is incorrect fee %f", tx.Vout[4].Value)
 			}
 
-			if tx.Vout[3].ScriptPubKey.Addresses[0] != pumpTipAddress {
+			if addr, err := outputAddress(tx, 3); err != nil {
+				return nil, err
+			} else if addr != pumpTipAddress {
 				return nil, fmt.Errorf("the address is incorrect")
 			}
 
@@ -136,7 +152,9 @@ func (e *Explorer) pumpDecode(tx *btcjson.TxRawResult, pushedData []byte, number
 				return nil, fmt.Errorf("the amount of tokens is incorrect fee %f", tx.Vout[2].Value)
 			}
 
-			if tx.Vout[1].ScriptPubKey.Addresses[0] != pumpTipAddress {
+			if addr, err := outputAddress(tx, 1); err != nil {
+				return nil, err
+			} else if addr != pumpTipAddress {
 				return nil, fmt.Errorf("the address is incorrect")
 			}
 		}
@@ -145,24 +163,29 @@ func (e *Explorer) pumpDecode(tx *btcjson.TxRawResult, pushedData []byte, number
 	txhash0, _ := chainhash.NewHashFromStr(pump.FeeTxHash)
 	txRawResult0, err := e.node.GetRawTransactionVerboseBool(txhash0)
 	if err != nil {
-		return nil, CHAIN_NETWORK_ERR
+		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 	}
 
-	pump.FeeAddress = txRawResult0.Vout[pump.FeeTxIndex].ScriptPubKey.Addresses[0]
+	pump.FeeAddress, err = outputAddress(txRawResult0, int(pump.FeeTxIndex))
+	if err != nil {
+		return nil, err
+	}
 
 	txhash1, _ := chainhash.NewHashFromStr(txRawResult0.Vin[0].Txid)
 	txRawResult1, err := e.node.GetRawTransactionVerboseBool(txhash1)
 	if err != nil {
-		return nil, CHAIN_NETWORK_ERR
+		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 	}
 
-	if pump.HolderAddress != txRawResult1.Vout[txRawResult0.Vin[0].Vout].ScriptPubKey.Addresses[0] {
+	if addr, err := outputAddress(txRawResult1, int(txRawResult0.Vin[0].Vout)); err != nil {
+		return nil, err
+	} else if pump.HolderAddress != addr {
 		return nil, fmt.Errorf("the address is not the same as the previous transaction")
 	}
 
 	err = e.dbc.DB.Create(pump).Error
 	if err != nil {
-		return nil, fmt.Errorf("pump create err: %s", err.Error())
+		return nil, fmt.Errorf("%w: save inscription: %v", STORAGE_ERR, err)
 	}
 
 	if dogeDepositAmt.Cmp(big.NewInt(0)) > 0 {
@@ -181,7 +204,9 @@ func (e *Explorer) pumpDecode(tx *btcjson.TxRawResult, pushedData []byte, number
 			return nil, fmt.Errorf("the amount of tokens is incorrect %f %s", tx.Vout[1].Value, utils.Float64ToBigInt(tx.Vout[1].Value*100000000).String())
 		}
 
-		if tx.Vout[1].ScriptPubKey.Addresses[0] != wdogeCoolAddress {
+		if addr, err := outputAddress(tx, 1); err != nil {
+			return nil, err
+		} else if addr != wdogeCoolAddress {
 			return nil, fmt.Errorf("the address is incorrect")
 		}
 
@@ -189,7 +214,9 @@ func (e *Explorer) pumpDecode(tx *btcjson.TxRawResult, pushedData []byte, number
 			return nil, fmt.Errorf("the amount of tokens is incorrect fee %f", tx.Vout[2].Value)
 		}
 
-		if tx.Vout[2].ScriptPubKey.Addresses[0] != wdogeFeeAddress {
+		if addr, err := outputAddress(tx, 2); err != nil {
+			return nil, err
+		} else if addr != wdogeFeeAddress {
 			return nil, fmt.Errorf("the address is incorrect")
 		}
 	}

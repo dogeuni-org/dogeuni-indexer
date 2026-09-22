@@ -16,8 +16,11 @@ import (
 func (e *Explorer) nftDecode(tx *btcjson.TxRawResult, number int64) (*models.NftInfo, error) {
 
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Hash).First(&models.NftInfo{}).Error
+	if err == nil {
+		return nil, fmt.Errorf("nft already exist %s", tx.Hash)
+	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, fmt.Errorf("nft already exist or err %s", tx.Hash)
+		return nil, fmt.Errorf("%w: dedup: %v", STORAGE_ERR, err)
 	}
 
 	param, err := e.reDecodeNft(tx)
@@ -43,7 +46,10 @@ func (e *Explorer) nftDecode(tx *btcjson.TxRawResult, number int64) (*models.Nft
 			return nil, errors.New("deploy op error, vout length is not 2")
 		}
 
-		nft.HolderAddress = tx.Vout[0].ScriptPubKey.Addresses[0]
+		nft.HolderAddress, err = outputAddress(tx, 0)
+		if err != nil {
+			return nil, err
+		}
 
 		if tx.Vout[0].Value != 0.001 {
 			return nil, fmt.Errorf("The amount of tokens exceeds the 0.0001")
@@ -53,7 +59,9 @@ func (e *Explorer) nftDecode(tx *btcjson.TxRawResult, number int64) (*models.Nft
 			return nil, fmt.Errorf("The balance is insufficient")
 		}
 
-		if tx.Vout[1].ScriptPubKey.Addresses[0] != nftFeeAddress {
+		if addr, err := outputAddress(tx, 1); err != nil {
+			return nil, err
+		} else if addr != nftFeeAddress {
 			return nil, fmt.Errorf("The address is incorrect")
 		}
 	}
@@ -64,7 +72,10 @@ func (e *Explorer) nftDecode(tx *btcjson.TxRawResult, number int64) (*models.Nft
 			return nil, errors.New("mint op error, vout length is not 2")
 		}
 
-		nft.HolderAddress = tx.Vout[0].ScriptPubKey.Addresses[0]
+		nft.HolderAddress, err = outputAddress(tx, 0)
+		if err != nil {
+			return nil, err
+		}
 
 		if tx.Vout[0].Value != 0.001 {
 			return nil, fmt.Errorf("The amount of tokens exceeds the 0.0001")
@@ -74,7 +85,9 @@ func (e *Explorer) nftDecode(tx *btcjson.TxRawResult, number int64) (*models.Nft
 			return nil, fmt.Errorf("The balance is insufficient")
 		}
 
-		if tx.Vout[1].ScriptPubKey.Addresses[0] != nftFeeAddress {
+		if addr, err := outputAddress(tx, 1); err != nil {
+			return nil, err
+		} else if addr != nftFeeAddress {
 			return nil, fmt.Errorf("The address is incorrect")
 		}
 	}
@@ -82,7 +95,7 @@ func (e *Explorer) nftDecode(tx *btcjson.TxRawResult, number int64) (*models.Nft
 	txHash0, _ := chainhash.NewHashFromStr(tx.Vin[0].Txid)
 	txRawResult0, err := e.node.GetRawTransactionVerboseBool(txHash0)
 	if err != nil {
-		return nil, fmt.Errorf("GetRawTransactionVerboseBool err: %s", err.Error())
+		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 	}
 
 	if nft.Op == "transfer" {
@@ -90,18 +103,27 @@ func (e *Explorer) nftDecode(tx *btcjson.TxRawResult, number int64) (*models.Nft
 		txhash1, _ := chainhash.NewHashFromStr(txRawResult0.Vin[0].Txid)
 		txRawResult1, err := e.node.GetRawTransactionVerboseBool(txhash1)
 		if err != nil {
-			return nil, fmt.Errorf("GetRawTransactionVerboseBool err: %s", err.Error())
+			return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 		}
 
-		nft.HolderAddress = txRawResult1.Vout[txRawResult0.Vin[0].Vout].ScriptPubKey.Addresses[0]
-		nft.ToAddress = tx.Vout[0].ScriptPubKey.Addresses[0]
+		nft.HolderAddress, err = outputAddress(txRawResult1, int(txRawResult0.Vin[0].Vout))
+		if err != nil {
+			return nil, err
+		}
+		nft.ToAddress, err = outputAddress(tx, 0)
+		if err != nil {
+			return nil, err
+		}
 
 		if nft.HolderAddress == nft.ToAddress {
 			return nil, errors.New("The address is the same")
 		}
 	}
 
-	nft.FeeAddress = txRawResult0.Vout[tx.Vin[0].Vout].ScriptPubKey.Addresses[0]
+	nft.FeeAddress, err = outputAddress(txRawResult0, int(tx.Vin[0].Vout))
+	if err != nil {
+		return nil, err
+	}
 
 	reader := bytes.NewReader(nft.ImageData)
 	hash, _ := e.ipfs.Add(reader)
@@ -109,7 +131,7 @@ func (e *Explorer) nftDecode(tx *btcjson.TxRawResult, number int64) (*models.Nft
 
 	err = e.dbc.DB.Create(nft).Error
 	if err != nil {
-		return nil, fmt.Errorf("InstallNftInfo err: %v", err)
+		return nil, fmt.Errorf("%w: save inscription: %v", STORAGE_ERR, err)
 	}
 
 	return nft, nil

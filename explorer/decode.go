@@ -173,3 +173,17 @@ func (e *Explorer) reDecodeFile(tx *btcjson.TxRawResult) (*models.FileInscriptio
 
 	return inscription, nil
 }
+
+// outputAddress returns the first address of output i of tx. Inscription txs are
+// untrusted input: a missing output, or a script without a standard address
+// (OP_RETURN, non-standard), makes the inscription invalid rather than crashing the scan.
+func outputAddress(tx *btcjson.TxRawResult, i int) (string, error) {
+	if i < 0 || i >= len(tx.Vout) {
+		return "", fmt.Errorf("tx %s has no output %d", tx.Txid, i)
+	}
+	addrs := tx.Vout[i].ScriptPubKey.Addresses
+	if len(addrs) == 0 {
+		return "", fmt.Errorf("tx %s output %d has no address", tx.Txid, i)
+	}
+	return addrs[0], nil
+}
