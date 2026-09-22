@@ -107,10 +107,8 @@ func (r *Router) StakeHolders(c *gin.Context) {
 		c.JSON(http.StatusOK, result)
 		return
 	}
-
-	if p.Limit > 50 {
-		p.Limit = 50
-	}
+	p.Limit = utils.PageLimit(p.Limit, 50)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	stakes, total, err := r.mysql.FindStakeByAddressTick("", p.Tick, p.Limit, p.OffSet)
 	if err != nil {
@@ -150,6 +148,8 @@ func (r *Router) StakeByAddressTick(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, 50)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	nacs, total, err := r.mysql.FindStakeByAddressTick(p.HolderAddress, p.Tick, p.Limit, p.OffSet)
 	if err != nil {
@@ -231,6 +231,8 @@ func (r *Router) StakeInfo(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, 50)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	result := &utils.HttpResult{}
 	result.Code = 200

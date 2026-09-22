@@ -28,6 +28,8 @@ func (r *Router) BoxCollect(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, 50)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	exc, total, err := r.mysql.FindBoxCollect(p.Tick0, p.Tick1, p.HolderAddress, p.Limit, p.OffSet)
 
@@ -71,6 +73,8 @@ func (r *Router) BoxInfo(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, 50)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	result := &utils.HttpResult{}
 

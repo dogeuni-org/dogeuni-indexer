@@ -45,6 +45,8 @@ func (r *InviteRouter) Order(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	filter := &models.InviteInfo{
 		OrderId:       params.OrderId,
@@ -97,6 +99,8 @@ func (r *InviteRouter) Collect(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	results := make([]*models.InviteCollect, 0)
 	total := int64(0)
@@ -144,6 +148,8 @@ func (r *InviteRouter) PumpReward(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	results := make([]*models.PumpInviteReward, 0)
 	total := int64(0)

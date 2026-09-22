@@ -47,6 +47,8 @@ func (r *BoxRouter) Order(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, utils.MaxPageLimit)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	filter := &models.BoxInfo{
 		OrderId:       p.OrderId,
@@ -100,6 +102,8 @@ func (r *BoxRouter) Collect(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, utils.MaxPageLimit)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	filter := &models.BoxCollect{
 		Tick0:         p.Tick0,

@@ -46,6 +46,8 @@ func (r *CrossRouter) Order(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, utils.MaxPageLimit)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	filter := &models.CrossInfo{
 		OrderId: p.OrderId,

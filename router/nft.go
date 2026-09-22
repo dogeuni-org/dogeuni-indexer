@@ -40,6 +40,8 @@ func (r *NftRouter) Order(c *gin.Context) {
 		c.JSON(http.StatusOK, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	filter := &models.NftInfo{
 		OrderId:       params.OrderId,
@@ -85,6 +87,8 @@ func (r *NftRouter) Collect(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	type NftCollectQuery struct {
 		Tick         string           `json:"tick"`
@@ -165,6 +169,8 @@ func (r *NftRouter) CollectAddress(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	filter := &models.NftCollectAddress{
 		Tick:          params.Tick,

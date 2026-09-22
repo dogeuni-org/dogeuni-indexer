@@ -43,6 +43,8 @@ func (r *StakeRouter) Order(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, utils.MaxPageLimit)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	filter := &models.StakeInfo{
 		Tick:          p.Tick,
@@ -92,6 +94,8 @@ func (r *StakeRouter) Collect(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, utils.MaxPageLimit)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	stakecs := make([]*models.StakeCollect, 0)
 	total := int64(0)
@@ -172,6 +176,8 @@ func (r *StakeRouter) CollectAddress(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, utils.MaxPageLimit)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	filter := &models.StakeCollectAddress{
 		Tick:          p.Tick,

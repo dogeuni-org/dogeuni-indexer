@@ -46,6 +46,8 @@ func (r *FileExchangeRouter) Order(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	var nfts []*models.FileExchangeInfo
 	var total int64
@@ -125,6 +127,8 @@ func (r *FileExchangeRouter) Activity(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	type QueryResult struct {
 		Op              string           `gorm:"column:op" json:"op"`
@@ -201,6 +205,8 @@ func (r *FileExchangeRouter) Collect(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	var nfts []*models.FileExchangeCollect
 	var total int64
@@ -239,6 +245,8 @@ func (r *FileExchangeRouter) SummaryAll(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, utils.MaxPageLimit)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	type FileMetaSummary struct {
 		Name        string  `gorm:"column:name" json:"name"`
@@ -311,6 +319,8 @@ func (r *FileExchangeRouter) SummaryNftAll(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, utils.MaxPageLimit)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	type NftMetaSummary struct {
 		Name        string  `gorm:"column:name" json:"name"`
@@ -381,6 +391,8 @@ func (r *FileExchangeRouter) Inscriptions(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	type QueryResult struct {
 		FileID             string         `gorm:"column:file_id" json:"file_id"`

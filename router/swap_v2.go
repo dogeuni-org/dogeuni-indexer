@@ -46,6 +46,8 @@ func (r *SwapV2Router) Order(c *gin.Context) {
 		c.JSON(http.StatusOK, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	filter := &models.SwapV2Info{
 		OrderId:       params.OrderId,
@@ -105,6 +107,8 @@ func (r *SwapV2Router) Liquidity(c *gin.Context) {
 		c.JSON(http.StatusOK, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxSeriesLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	filter := &models.SwapV2Liquidity{
 		PairId:  params.PairId,
@@ -152,6 +156,8 @@ func (r *SwapV2Router) SwapLiquidityHolder(c *gin.Context) {
 		c.JSON(http.StatusOK, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	type QueryResult struct {
 		Liquidity      *models.Number `gorm:"column:amt" json:"liquidity"`

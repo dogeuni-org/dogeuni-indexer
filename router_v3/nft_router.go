@@ -102,10 +102,8 @@ func (r *Router) FindNftHolders(c *gin.Context) {
 		c.JSON(http.StatusOK, result)
 		return
 	}
-
-	if p.Limit > 50 {
-		p.Limit = 50
-	}
+	p.Limit = utils.PageLimit(p.Limit, 50)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	cards, total, err := r.mysql.FindNftHoldersByTick(p.Tick, p.Limit, p.OffSet)
 	if err != nil {
@@ -161,6 +159,8 @@ func (r *Router) NftInfo(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, 50)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	result := &utils.HttpResult{}
 	result.Code = 200
@@ -198,6 +198,8 @@ func (r *Router) FindNftByAddress(c *gin.Context) {
 		c.JSON(http.StatusOK, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, 50)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	nacs, total, err := r.mysql.FindNftByAddressTick(p.HolderAddress, p.Tick, p.Limit, p.OffSet)
 	if err != nil {

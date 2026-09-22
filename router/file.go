@@ -44,6 +44,8 @@ func (r *FileRouter) Order(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	filter := &models.FileInfo{
 		OrderId:       params.OrderId,
@@ -97,6 +99,8 @@ func (r *FileRouter) CollectAddress(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	type QueryResult struct {
 		FileId        string           `gorm:"column:file_id" json:"file_id"`
@@ -195,6 +199,8 @@ func (r *FileRouter) CollectionsInscriptions(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	names := make([]string, 0)
 	err := r.dbc.DB.Model(&models.FileMetaAttribute{}).Select("name").Where("meta_id = ?", params.MetaId).Limit(params.Limit).Offset(params.OffSet).Find(&names).Error
@@ -278,6 +284,8 @@ func (r *FileRouter) Collections(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	filter := &models.FileMeta{
 		MetaId:  params.MetaId,
