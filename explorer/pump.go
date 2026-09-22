@@ -83,8 +83,8 @@ func (e *Explorer) pumpDecode(tx *btcjson.TxRawResult, pushedData []byte, number
 				return nil, fmt.Errorf("deposit op error, vout length is not 5")
 			}
 
-			if utils.Float64ToBigInt(tx.Vout[3].Value*100000000).Cmp(big.NewInt(PumpCreateFee)) < 0 {
-				return nil, fmt.Errorf("the amount of tokens is incorrect %f %s", tx.Vout[1].Value, utils.Float64ToBigInt(tx.Vout[3].Value*100000000).String())
+			if e.voutSats(tx, 3, number).Cmp(big.NewInt(PumpCreateFee)) < 0 {
+				return nil, fmt.Errorf("the amount of tokens is incorrect %f %s", tx.Vout[3].Value, e.voutSats(tx, 3, number).String())
 			}
 
 			if addr, err := outputAddress(tx, 3); err != nil {
@@ -93,7 +93,7 @@ func (e *Explorer) pumpDecode(tx *btcjson.TxRawResult, pushedData []byte, number
 				return nil, fmt.Errorf("the address is incorrect")
 			}
 
-			if utils.Float64ToBigInt(tx.Vout[4].Value*100000000).Cmp(big.NewInt(PumpTipFee)) < 0 {
+			if e.voutSats(tx, 4, number).Cmp(big.NewInt(PumpTipFee)) < 0 {
 				return nil, fmt.Errorf("the amount of tokens is incorrect fee %f", tx.Vout[4].Value)
 			}
 
@@ -108,8 +108,8 @@ func (e *Explorer) pumpDecode(tx *btcjson.TxRawResult, pushedData []byte, number
 				return nil, fmt.Errorf("deposit op error, vout length is not 5")
 			}
 
-			if utils.Float64ToBigInt(tx.Vout[1].Value*100000000).Cmp(big.NewInt(PumpCreateFee)) < 0 {
-				return nil, fmt.Errorf("the amount of tokens is incorrect %f %s", tx.Vout[1].Value, utils.Float64ToBigInt(tx.Vout[1].Value*100000000).String())
+			if e.voutSats(tx, 1, number).Cmp(big.NewInt(PumpCreateFee)) < 0 {
+				return nil, fmt.Errorf("the amount of tokens is incorrect %f %s", tx.Vout[1].Value, e.voutSats(tx, 1, number).String())
 			}
 
 			if addr, err := outputAddress(tx, 1); err != nil {
@@ -118,7 +118,7 @@ func (e *Explorer) pumpDecode(tx *btcjson.TxRawResult, pushedData []byte, number
 				return nil, fmt.Errorf("the address is incorrect")
 			}
 
-			if utils.Float64ToBigInt(tx.Vout[2].Value*100000000).Cmp(big.NewInt(PumpTipFee)) < 0 {
+			if e.voutSats(tx, 2, number).Cmp(big.NewInt(PumpTipFee)) < 0 {
 				return nil, fmt.Errorf("the amount of tokens is incorrect fee %f", tx.Vout[2].Value)
 			}
 
@@ -137,8 +137,8 @@ func (e *Explorer) pumpDecode(tx *btcjson.TxRawResult, pushedData []byte, number
 				return nil, fmt.Errorf("deposit op error, vout length is not 5")
 			}
 
-			if utils.Float64ToBigInt(tx.Vout[3].Value*100000000).Cmp(big.NewInt(PumpTipFee)) < 0 {
-				return nil, fmt.Errorf("the amount of tokens is incorrect fee %f", tx.Vout[4].Value)
+			if e.voutSats(tx, 3, number).Cmp(big.NewInt(PumpTipFee)) < 0 {
+				return nil, fmt.Errorf("the amount of tokens is incorrect fee %f", tx.Vout[3].Value)
 			}
 
 			if addr, err := outputAddress(tx, 3); err != nil {
@@ -152,8 +152,8 @@ func (e *Explorer) pumpDecode(tx *btcjson.TxRawResult, pushedData []byte, number
 				return nil, fmt.Errorf("deposit op error, vout length is not 5")
 			}
 
-			if utils.Float64ToBigInt(tx.Vout[1].Value*100000000).Cmp(big.NewInt(PumpTipFee)) < 0 {
-				return nil, fmt.Errorf("the amount of tokens is incorrect fee %f", tx.Vout[2].Value)
+			if e.voutSats(tx, 1, number).Cmp(big.NewInt(PumpTipFee)) < 0 {
+				return nil, fmt.Errorf("the amount of tokens is incorrect fee %f", tx.Vout[1].Value)
 			}
 
 			if addr, err := outputAddress(tx, 1); err != nil {
@@ -204,8 +204,8 @@ func (e *Explorer) pumpDecode(tx *btcjson.TxRawResult, pushedData []byte, number
 			fee = big.NewInt(50000000)
 		}
 
-		if utils.Float64ToBigInt(tx.Vout[1].Value*100000000).Cmp(dogeDepositAmt) < 0 {
-			return nil, fmt.Errorf("the amount of tokens is incorrect %f %s", tx.Vout[1].Value, utils.Float64ToBigInt(tx.Vout[1].Value*100000000).String())
+		if e.voutSats(tx, 1, number).Cmp(dogeDepositAmt) < 0 {
+			return nil, fmt.Errorf("the amount of tokens is incorrect %f %s", tx.Vout[1].Value, e.voutSats(tx, 1, number).String())
 		}
 
 		if addr, err := outputAddress(tx, 1); err != nil {
@@ -214,7 +214,7 @@ func (e *Explorer) pumpDecode(tx *btcjson.TxRawResult, pushedData []byte, number
 			return nil, fmt.Errorf("the address is incorrect")
 		}
 
-		if utils.Float64ToBigInt(tx.Vout[2].Value*100000000).Cmp(fee) < 0 {
+		if e.voutSats(tx, 2, number).Cmp(fee) < 0 {
 			return nil, fmt.Errorf("the amount of tokens is incorrect fee %f", tx.Vout[2].Value)
 		}
 

@@ -133,8 +133,8 @@ func (e *Explorer) swapV2RouterDecode(tx *btcjson.TxRawResult, height int64) ([]
 			fee = big.NewInt(50000000)
 		}
 
-		if utils.Float64ToBigInt(tx.Vout[1].Value*100000000).Cmp(dogeDepositAmt) < 0 {
-			return nil, fmt.Errorf("the amount of tokens is incorrect %f %s", tx.Vout[1].Value, utils.Float64ToBigInt(tx.Vout[1].Value*100000000).String())
+		if e.voutSats(tx, 1, height).Cmp(dogeDepositAmt) < 0 {
+			return nil, fmt.Errorf("the amount of tokens is incorrect %f %s", tx.Vout[1].Value, e.voutSats(tx, 1, height).String())
 		}
 
 		if addr, err := outputAddress(tx, 1); err != nil {
@@ -143,7 +143,7 @@ func (e *Explorer) swapV2RouterDecode(tx *btcjson.TxRawResult, height int64) ([]
 			return nil, fmt.Errorf("the address is incorrect")
 		}
 
-		if utils.Float64ToBigInt(tx.Vout[2].Value*100000000).Cmp(fee) < 0 {
+		if e.voutSats(tx, 2, height).Cmp(fee) < 0 {
 			return nil, fmt.Errorf("the amount of tokens is incorrect fee %f", tx.Vout[2].Value)
 		}
 

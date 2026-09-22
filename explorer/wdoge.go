@@ -56,8 +56,8 @@ func (e *Explorer) wdogeDecode(tx *btcjson.TxRawResult, pushedData []byte, numbe
 			fee = big.NewInt(50000000)
 		}
 
-		if utils.Float64ToBigInt(tx.Vout[1].Value*100000000).Cmp(wdoge.Amt.Int()) < 0 {
-			return nil, fmt.Errorf("the amount of tokens is incorrect %f %s", tx.Vout[1].Value, utils.Float64ToBigInt(tx.Vout[1].Value*100000000).String())
+		if e.voutSats(tx, 1, number).Cmp(wdoge.Amt.Int()) < 0 {
+			return nil, fmt.Errorf("the amount of tokens is incorrect %f %s", tx.Vout[1].Value, e.voutSats(tx, 1, number).String())
 		}
 
 		if addr, err := outputAddress(tx, 1); err != nil {
@@ -66,7 +66,7 @@ func (e *Explorer) wdogeDecode(tx *btcjson.TxRawResult, pushedData []byte, numbe
 			return nil, fmt.Errorf("the address is incorrect")
 		}
 
-		if utils.Float64ToBigInt(tx.Vout[2].Value*100000000).Cmp(fee) < 0 {
+		if e.voutSats(tx, 2, number).Cmp(fee) < 0 {
 			return nil, fmt.Errorf("the amount of tokens is incorrect fee %f", tx.Vout[2].Value)
 		}
 

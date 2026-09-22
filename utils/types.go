@@ -46,6 +46,9 @@ type ExplorerConfig struct {
 	// Activation heights for protocols that were not indexed historically; 0 keeps the protocol disabled
 	StakeV2Height int64 `json:"stake_v2_height"`
 	NftHeight     int64 `json:"nft_height"`
+	// From AmountHeight on, DOGE output values are compared in exact satoshis instead
+	// of float64; 0 keeps the legacy comparison
+	AmountHeight int64 `json:"amount_height"`
 }
 
 type HttpResult struct {

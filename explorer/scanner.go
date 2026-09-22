@@ -66,6 +66,7 @@ type Explorer struct {
 	currentHeight int64
 	stakeV2Height int64
 	nftHeight     int64
+	amountHeight  int64
 
 	ctx context.Context
 	wg  *sync.WaitGroup
@@ -84,6 +85,7 @@ func NewExplorer(ctx context.Context, wg *sync.WaitGroup, rpcClient *rpcclient.C
 		currentHeight: cfg.FromBlock,
 		stakeV2Height: cfg.StakeV2Height,
 		nftHeight:     cfg.NftHeight,
+		amountHeight:  cfg.AmountHeight,
 		ctx:           ctx,
 		wg:            wg,
 	}

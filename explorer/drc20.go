@@ -65,12 +65,9 @@ func (e *Explorer) drc20Decode(tx *btcjson.TxRawResult, pushedData []byte, numbe
 		if err != nil {
 			return nil, err
 		}
-		card.Repeat = int64(tx.Vout[0].Value / 0.001)
-		if card.Repeat > 30 {
-			card.Repeat = 30
-		}
-
-		if tx.Vout[0].Value != 0.001*float64(card.Repeat) {
+		var exact bool
+		card.Repeat, exact = e.mintRepeat(tx.Vout[0].Value, number)
+		if !exact {
 			return nil, fmt.Errorf("the amount of tokens exceeds the 0.0001")
 		}
 
