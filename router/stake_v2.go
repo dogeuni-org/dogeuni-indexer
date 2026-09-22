@@ -45,6 +45,8 @@ func (s *StakeV2Router) Order(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, utils.MaxPageLimit)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	filter := &models.StakeV2Info{
 		OrderId: p.OrderId,
@@ -88,6 +90,8 @@ func (s *StakeV2Router) Collect(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, utils.MaxPageLimit)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	filter := &models.StakeV2Collect{}
 
@@ -130,6 +134,8 @@ func (s *StakeV2Router) CollectAddress(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, utils.MaxPageLimit)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	filter := &models.StakeV2CollectAddress{}
 

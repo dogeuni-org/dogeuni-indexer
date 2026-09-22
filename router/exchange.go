@@ -46,6 +46,8 @@ func (r *ExchangeRouter) Collect(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, utils.MaxPageLimit)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	exc := make([]*models.ExchangeCollect, 0)
 	total := int64(0)
@@ -112,6 +114,8 @@ func (r *ExchangeRouter) Order(c *gin.Context) {
 		c.JSON(http.StatusOK, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, utils.MaxPageLimit)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	filter := &models.ExchangeInfo{
 		OrderId:       p.OrderId,
@@ -208,6 +212,8 @@ func (r *ExchangeRouter) Summary(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, utils.MaxPageLimit)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	type Drc20InfoResult struct {
 		TradingPairs          string  `json:"trading_pairs"`
@@ -294,6 +300,8 @@ func (r *ExchangeRouter) SummaryK(c *gin.Context) {
 		c.JSON(http.StatusOK, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, utils.MaxPageLimit)
+	p.Offset = utils.PageOffset(p.Offset)
 
 	p.DateInterval = strings.ToLower(p.DateInterval)
 	p.Tick0, p.Tick1, _, _, _, _ = utils.SortTokens(p.Tick0, p.Tick1, nil, nil, nil, nil)

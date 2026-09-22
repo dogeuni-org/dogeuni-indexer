@@ -54,6 +54,8 @@ func (r *Drc20Router) Order(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	filter := &models.Drc20Info{
 		OrderId:       params.OrderId,
@@ -113,6 +115,8 @@ func (r *Drc20Router) History(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	filter := &models.Drc20Revert{
 		Tick: params.Tick,
@@ -164,6 +168,8 @@ func (r *Drc20Router) CollectAddress(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	var total int64
 	results := make([]*models.Drc20CollectAddress, 0)
@@ -230,9 +236,19 @@ func (r *Drc20Router) Collect(c *gin.Context) {
 		return
 	}
 
+	// With no filter and a limit above 200 the client asks for every tick, served
+	// whole from a per-block cache. Anything else is an ordinary page.
+	all := params.Tick == "" && params.HolderAddress == "" && params.SearchKey == "" && params.Limit > 200
+	if all {
+		params.Limit, params.OffSet = -1, 0
+	} else {
+		params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+		params.OffSet = utils.PageOffset(params.OffSet)
+	}
+
 	maxHeight := 0
 	err := r.dbc.DB.Model(&models.Block{}).Select("max(block_number)").Scan(&maxHeight).Error
-	if params.Tick == "" && params.HolderAddress == "" && params.Limit > 200 {
+	if all {
 		if cacheDrc20CollectAll != nil && cacheDrc20CollectAll.CacheNumber == int64(maxHeight) {
 			result := &utils.HttpResult{}
 			result.Code = 200
@@ -318,10 +334,11 @@ func (r *Drc20Router) Collect(c *gin.Context) {
 		}
 	}
 
-	if params.Tick == "" && params.HolderAddress == "" {
+	if all {
 		cacheDrc20CollectAll = &models.Drc20CollectCache{
 			CacheNumber: int64(maxHeight),
 			Results:     results,
+			Total:       total,
 		}
 	}
 

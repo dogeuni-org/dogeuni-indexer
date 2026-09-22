@@ -157,10 +157,8 @@ func (r *Router) FindDrc20Holders(c *gin.Context) {
 		c.JSON(http.StatusOK, result)
 		return
 	}
-
-	if p.Limit > 50 {
-		p.Limit = 50
-	}
+	p.Limit = utils.PageLimit(p.Limit, 50)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	cards, total, err := r.mysql.FindDrc20HoldersByTick(p.Tick, p.Limit, p.OffSet)
 	if err != nil {
@@ -197,6 +195,8 @@ func (r *Router) FindDrc20sByAddress(c *gin.Context) {
 		c.JSON(http.StatusOK, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, 50)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	cards, total, err := r.mysql.FindDrc20AllByAddress(p.ReceiveAddress, p.Limit, p.OffSet)
 	if err != nil {
@@ -264,10 +264,8 @@ func (r *Router) FindOrders(c *gin.Context) {
 		c.JSON(http.StatusOK, result)
 		return
 	}
-
-	if p.Limit > 50 {
-		p.Limit = 50
-	}
+	p.Limit = utils.PageLimit(p.Limit, 50)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	orders, total, err := r.mysql.FindOrders(p.ReceiveAddress, p.Op, p.Tick, p.Limit, p.OffSet)
 
@@ -307,10 +305,8 @@ func (r *Router) FindOrderByAddress(c *gin.Context) {
 		c.JSON(http.StatusOK, result)
 		return
 	}
-
-	if p.Limit > 50 {
-		p.Limit = 50
-	}
+	p.Limit = utils.PageLimit(p.Limit, 50)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	_, err := btcutil.DecodeAddress(p.ReceiveAddress, &chaincfg.MainNetParams)
 	if err != nil {
@@ -384,10 +380,8 @@ func (r *Router) FindOrdersIndex(c *gin.Context) {
 		c.JSON(http.StatusOK, result)
 		return
 	}
-
-	if p.Limit > 50 {
-		p.Limit = 50
-	}
+	p.Limit = utils.PageLimit(p.Limit, 50)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	orders, total, err := r.mysql.FindOrdersindex(p.Address, p.Tick, p.Hash, p.Number, p.Limit, p.OffSet)
 	if err != nil {
@@ -482,10 +476,8 @@ func (r *Router) FindOrdersByTick(c *gin.Context) {
 		c.JSON(http.StatusOK, result)
 		return
 	}
-
-	if p.Limit > 50 {
-		p.Limit = 50
-	}
+	p.Limit = utils.PageLimit(p.Limit, 50)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	_, err := btcutil.DecodeAddress(p.ReceiveAddress, &chaincfg.MainNetParams)
 	if err != nil {

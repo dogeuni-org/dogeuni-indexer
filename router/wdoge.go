@@ -39,6 +39,8 @@ func (r *WdogeRouter) Order(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	filter := &models.WDogeInfo{
 		OrderId:       params.OrderId,

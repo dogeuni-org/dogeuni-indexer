@@ -54,6 +54,8 @@ func (r *Router) WDogeInfo(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, 50)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	result := &utils.HttpResult{}
 	result.Code = 200

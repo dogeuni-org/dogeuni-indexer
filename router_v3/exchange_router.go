@@ -31,6 +31,8 @@ func (r *Router) ExchangeCollect(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, 50)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	exc, total, err := r.mysql.FindExchangeCollect(p.ExId, p.Tick0, p.Tick1, p.HolderAddress, p.NotDone, p.Limit, p.OffSet)
 
@@ -76,6 +78,8 @@ func (r *Router) ExchangeInfo(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, 50)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	result := &utils.HttpResult{}
 
@@ -116,6 +120,8 @@ func (r *Router) ExchangeInfoByTick(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, 50)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	result := &utils.HttpResult{}
 

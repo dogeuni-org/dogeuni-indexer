@@ -195,6 +195,8 @@ func (r *Router) SwapInfo(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, 50)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	result := &utils.HttpResult{}
 	result.Code = 200

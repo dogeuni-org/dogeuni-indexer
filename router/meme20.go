@@ -47,6 +47,8 @@ func (r *Meme20Router) Order(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	filter := &models.Meme20Info{
 		OrderId:       params.OrderId,
@@ -106,6 +108,8 @@ func (r *Meme20Router) History(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	filter := &models.Meme20Revert{
 		TickId: params.TickId,
@@ -163,6 +167,8 @@ func (r *Meme20Router) CollectAddress(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	results := make([]*models.Meme20CollectAddress, 0)
 	subQuery := r.dbc.DB.Table("meme20_collect_address AS mca").
@@ -227,6 +233,8 @@ func (r *Meme20Router) Collect(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	results := make([]*models.Meme20Collect, 0)
 	subQuery := r.dbc.DB.Table("meme20_collect AS di").

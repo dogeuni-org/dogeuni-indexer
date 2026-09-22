@@ -48,6 +48,8 @@ func (r *SwapRouter) Order(c *gin.Context) {
 		c.JSON(http.StatusOK, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	filter := &models.SwapInfo{
 		OrderId:       params.OrderId,
@@ -114,6 +116,8 @@ func (r *SwapRouter) SwapLiquidity(c *gin.Context) {
 		c.JSON(http.StatusOK, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxSeriesLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	filter := &models.SwapLiquidity{
 		Tick0: params.Tick0,
@@ -159,6 +163,8 @@ func (r *SwapRouter) SwapLiquidityHolder(c *gin.Context) {
 		c.JSON(http.StatusOK, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	params.Tick0, params.Tick1, _, _, _, _ = utils.SortTokens(params.Tick0, params.Tick1, nil, nil, nil, nil)
 
@@ -290,6 +296,8 @@ func (r *SwapRouter) SwapK(c *gin.Context) {
 		c.JSON(http.StatusOK, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, utils.MaxSeriesLimit)
+	p.Offset = utils.PageOffset(p.Offset)
 
 	p.DateInterval = strings.ToLower(p.DateInterval)
 
@@ -334,6 +342,8 @@ func (r *SwapRouter) SwapTvl(c *gin.Context) {
 		c.JSON(http.StatusOK, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, utils.MaxSeriesLimit)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	ticks := strings.Split(p.Tick, "-SWAP-")
 
@@ -406,6 +416,8 @@ func (r *SwapRouter) SwapSummaryTvlTotal(c *gin.Context) {
 		c.JSON(http.StatusOK, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, utils.MaxSeriesLimit)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	type SwapInfoSummaryResult struct {
 		Liquidity  string  `gorm:"column:liquidity" json:"liquidity"`
@@ -457,6 +469,8 @@ func (r *SwapRouter) SwapSummary(c *gin.Context) {
 		c.JSON(http.StatusOK, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, utils.MaxPageLimit)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	type Drc20InfoResult struct {
 		Tick       string  `json:"tick"`
@@ -552,6 +566,8 @@ func (r *SwapRouter) SwapPair(c *gin.Context) {
 		c.JSON(http.StatusOK, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, utils.MaxPageLimit)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	type SwapLiquiditySummaryResult struct {
 		Tick        string

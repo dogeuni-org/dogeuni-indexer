@@ -57,6 +57,8 @@ func (r *PumpRouter) Order(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	filter := &models.PumpInfo{
 		OrderId:       params.OrderId,
@@ -113,6 +115,8 @@ func (r *PumpRouter) MergeOrder(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	infos := make([]*MergeSwapPumpOrderResult, 0)
 
@@ -245,6 +249,8 @@ func (r *PumpRouter) Liquidity(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	filter := &models.PumpLiquidity{
 		HolderAddress: params.HolderAddress,
@@ -291,10 +297,8 @@ func (r *PumpRouter) Board(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
-
-	if params.Limit > 100 {
-		params.Limit = 100
-	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	//OrderBy
 	// 1. Trading volume
@@ -614,6 +618,8 @@ func (r *PumpRouter) King(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxPageLimit)
+	params.OffSet = utils.PageOffset(params.OffSet)
 
 	type King struct {
 		TickId        string           `json:"tick_id"`

@@ -39,6 +39,8 @@ func (r *ConsensusRouter) Order(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, utils.MaxPageLimit)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	filter := &models.ConsensusInfo{
 		OrderId:       p.OrderId,
@@ -76,6 +78,8 @@ func (r *ConsensusRouter) Records(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, result)
 		return
 	}
+	p.Limit = utils.PageLimit(p.Limit, utils.MaxPageLimit)
+	p.OffSet = utils.PageOffset(p.OffSet)
 
 	where := map[string]interface{}{}
 	if p.HolderAddress != "" {
