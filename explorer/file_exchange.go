@@ -18,6 +18,10 @@ import (
 
 func (e *Explorer) fileExchangeDecode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.FileExchangeInfo, error) {
 
+	if err := e.dropPending(&models.FileExchangeInfo{}, tx.Hash); err != nil {
+		return nil, err
+	}
+
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Hash).First(&models.FileExchangeInfo{}).Error
 	if err == nil {
 		return nil, fmt.Errorf("file-exchange already exist %s", tx.Hash)
@@ -162,19 +166,19 @@ func (e *Explorer) fileExchangeCancel(ex *models.FileExchangeInfo) error {
 	err := e.dbc.FileExchangeCancel(tx, ex)
 	if err != nil {
 		tx.Rollback()
-		return nil
+		return fmt.Errorf("fileExchangeCancel err: %s", err.Error())
 	}
 
 	err = tx.Model(&models.FileExchangeInfo{}).Where("tx_hash = ?", ex.TxHash).Update("order_status", 0).Error
 	if err != nil {
 		tx.Rollback()
-		return nil
+		return fmt.Errorf("update status err: %s", err.Error())
 	}
 
 	err = tx.Commit().Error
 	if err != nil {
 		tx.Rollback()
-		return nil
+		return fmt.Errorf("tx.Commit err: %s", err.Error())
 	}
 	return nil
 }

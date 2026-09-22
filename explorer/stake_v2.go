@@ -17,6 +17,10 @@ import (
 
 func (e *Explorer) stakeV2Decode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.StakeV2Info, error) {
 
+	if err := e.dropPending(&models.StakeV2Info{}, tx.Txid); err != nil {
+		return nil, err
+	}
+
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Txid).First(&models.StakeV2Info{}).Error
 	if err == nil {
 		return nil, fmt.Errorf("stake already exist %s", tx.Txid)

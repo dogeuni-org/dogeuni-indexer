@@ -18,6 +18,10 @@ import (
 
 // consensusDecode parses consensus protocol transactions
 func (e *Explorer) consensusDecode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.ConsensusInfo, error) {
+	if err := e.dropPending(&models.ConsensusInfo{}, tx.Txid); err != nil {
+		return nil, err
+	}
+
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Txid).First(&models.ConsensusInfo{}).Error
 	if err == nil {
 		return nil, fmt.Errorf("consensus already exist %s", tx.Txid)

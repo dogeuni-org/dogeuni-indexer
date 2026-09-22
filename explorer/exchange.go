@@ -18,6 +18,10 @@ import (
 
 func (e *Explorer) exchangeDecode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.ExchangeInfo, error) {
 
+	if err := e.dropPending(&models.ExchangeInfo{}, tx.Hash); err != nil {
+		return nil, err
+	}
+
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Hash).First(&models.ExchangeInfo{}).Error
 	if err == nil {
 		return nil, fmt.Errorf("exchange already exist %s", tx.Hash)
@@ -42,6 +46,7 @@ func (e *Explorer) exchangeDecode(tx *btcjson.TxRawResult, pushedData []byte, nu
 	ex.TxHash = tx.Hash
 	ex.BlockHash = tx.BlockHash
 	ex.BlockNumber = number
+	ex.OrderStatus = 1
 	ex.HolderAddress, err = outputAddress(tx, 0)
 	if err != nil {
 		return nil, err
@@ -137,7 +142,7 @@ func (e *Explorer) exchangeCancel(ex *models.ExchangeInfo) error {
 	err := e.dbc.ExchangeCancel(tx, ex)
 	if err != nil {
 		tx.Rollback()
-		return nil
+		return fmt.Errorf("exchangeCancel err: %s", err.Error())
 	}
 
 	err = tx.Model(&models.ExchangeInfo{}).Where("tx_hash = ?", ex.TxHash).Updates(map[string]interface{}{"order_status": 0, "tick0": ex.Tick0, "tick1": ex.Tick1}).Error

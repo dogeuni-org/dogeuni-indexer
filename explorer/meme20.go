@@ -15,6 +15,10 @@ import (
 
 func (e *Explorer) meme20Decode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.Meme20Info, error) {
 
+	if err := e.dropPending(&models.Meme20Info{}, tx.Hash); err != nil {
+		return nil, err
+	}
+
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Hash).First(&models.Meme20Info{}).Error
 	if err == nil {
 		return nil, fmt.Errorf("meme20 already exist %s", tx.Hash)

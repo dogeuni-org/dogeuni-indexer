@@ -15,6 +15,10 @@ import (
 
 func (e *Explorer) wdogeDecode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.WDogeInfo, error) {
 
+	if err := e.dropPending(&models.WDogeInfo{}, tx.Txid); err != nil {
+		return nil, err
+	}
+
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Txid).First(&models.WDogeInfo{}).Error
 	if err == nil {
 		return nil, fmt.Errorf("wdoge already exist %s", tx.Txid)
@@ -159,9 +163,20 @@ func (e *Explorer) wdogeWithdraw(wdoge *models.WDogeInfo) error {
 
 func (e *Explorer) wdogeDepositSwap(dbtx *gorm.DB, wdoge *models.WDogeInfo) error {
 
+	// The deposit commits ahead of the swap/pump it funds. If that swap/pump is cut off
+	// by a fault, the tx is executed again and must not be credited twice.
+	var done int64
+	err := dbtx.Model(&models.WDogeInfo{}).Where("tx_hash = ? AND op = ?", wdoge.TxHash, wdoge.Op).Count(&done).Error
+	if err != nil {
+		return err
+	}
+	if done > 0 {
+		return nil
+	}
+
 	wdoge.OrderId = uuid.New().String()
 
-	err := e.dbc.DogeDeposit(dbtx, wdoge)
+	err = e.dbc.DogeDeposit(dbtx, wdoge)
 	if err != nil {
 		return err
 	}

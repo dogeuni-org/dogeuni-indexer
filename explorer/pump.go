@@ -21,6 +21,10 @@ const (
 
 func (e *Explorer) pumpDecode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.PumpInfo, error) {
 
+	if err := e.dropPending(&models.PumpInfo{}, tx.Hash); err != nil {
+		return nil, err
+	}
+
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Hash).First(&models.PumpInfo{}).Error
 	if err == nil {
 		return nil, fmt.Errorf("pump already exist %s", tx.Hash)

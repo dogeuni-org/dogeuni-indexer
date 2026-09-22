@@ -187,3 +187,15 @@ func outputAddress(tx *btcjson.TxRawResult, i int) (string, error) {
 	}
 	return addrs[0], nil
 }
+
+// dropPending deletes the rows a previous pass saved for txHash but never finished:
+// execute sets order_status to 0 in the same transaction as its writes, and a rejected
+// tx gets err_info, so a row with neither was cut off by a node or database fault
+// before its execute committed. The tx is then decoded and executed again.
+func (e *Explorer) dropPending(model interface{}, txHash string) error {
+	err := e.dbc.DB.Where("tx_hash = ? AND order_status = 1 AND (err_info = '' OR err_info IS NULL)", txHash).Delete(model).Error
+	if err != nil {
+		return fmt.Errorf("%w: drop pending: %v", STORAGE_ERR, err)
+	}
+	return nil
+}

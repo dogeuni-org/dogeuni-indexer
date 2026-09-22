@@ -15,6 +15,10 @@ import (
 
 func (e *Explorer) nftDecode(tx *btcjson.TxRawResult, number int64) (*models.NftInfo, error) {
 
+	if err := e.dropPending(&models.NftInfo{}, tx.Hash); err != nil {
+		return nil, err
+	}
+
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Hash).First(&models.NftInfo{}).Error
 	if err == nil {
 		return nil, fmt.Errorf("nft already exist %s", tx.Hash)
@@ -39,6 +43,7 @@ func (e *Explorer) nftDecode(tx *btcjson.TxRawResult, number int64) (*models.Nft
 	nft.TxHash = tx.Hash
 	nft.BlockHash = tx.BlockHash
 	nft.BlockNumber = number
+	nft.OrderStatus = 1
 
 	if nft.Op == "deploy" {
 

@@ -13,11 +13,16 @@ import (
 )
 
 func newTestExplorer(t *testing.T, tables ...interface{}) *Explorer {
-	dbc := storage.NewSqliteClient(utils.SqliteConfig{Switch: true, Database: filepath.Join(t.TempDir(), "t.db")})
-	if err := dbc.DB.AutoMigrate(tables...); err != nil {
+	return newTestExplorerAt(t, filepath.Join(t.TempDir(), "t.db"), tables...)
+}
+
+func newTestExplorerAt(t *testing.T, dsn string, tables ...interface{}) *Explorer {
+	base := storage.NewSqliteClient(utils.SqliteConfig{Switch: true, Database: dsn})
+	if err := base.DB.AutoMigrate(tables...); err != nil {
 		t.Fatal(err)
 	}
-	return &Explorer{dbc: dbc}
+	dbc, fault := base.WithFaultRecorder()
+	return &Explorer{dbc: dbc, fault: fault, verify: NewVerifys(dbc)}
 }
 
 // fork() drops drc20_info before any protocol fork runs; a deploy above the fork

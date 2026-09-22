@@ -8,6 +8,7 @@ import (
 	"dogeuni-indexer/utils"
 	"errors"
 	"fmt"
+	"github.com/dogecoinw/doged/btcjson"
 	"github.com/dogecoinw/doged/chaincfg/chainhash"
 	"github.com/dogecoinw/doged/rpcclient"
 	"github.com/dogecoinw/go-dogecoin/log"
@@ -34,10 +35,25 @@ var (
 	STORAGE_ERR       = errors.New("storage error")
 )
 
-// retryable reports whether err came from the node or the database rather than from
-// the inscription itself. Such a tx must not be dropped: the block is scanned again.
+// retryable reports whether err came from the node rather than from the inscription
+// itself. Such a tx must not be dropped: the block is scanned again. Database faults
+// take the same path through e.fault, which sees them even where the code turned
+// them into plain strings.
 func retryable(err error) bool {
-	return errors.Is(err, CHAIN_NETWORK_ERR) || errors.Is(err, STORAGE_ERR)
+	return errors.Is(err, CHAIN_NETWORK_ERR)
+}
+
+// failTx records why a tx was rejected, unless the rejection was caused by the node or
+// the database: then the tx is still pending and the block is aborted to scan it again.
+func (e *Explorer) failTx(model interface{}, txHash string, err error) error {
+	if retryable(err) {
+		return fmt.Errorf("scan %s: %w", txHash, err)
+	}
+	if fault := e.fault.Take(); fault != nil {
+		return fmt.Errorf("scan %s: %w: %w (%v)", txHash, STORAGE_ERR, fault, err)
+	}
+	e.dbc.DB.Model(model).Where("tx_hash = ?", txHash).Update("err_info", err.Error())
+	return nil
 }
 
 type Explorer struct {
@@ -46,6 +62,7 @@ type Explorer struct {
 	dbc           *storage.DBClient
 	ipfs          *shell.Shell
 	verify        *Verifys
+	fault         *storage.FaultRecorder
 	currentHeight int64
 	stakeV2Height int64
 	nftHeight     int64
@@ -55,11 +72,15 @@ type Explorer struct {
 }
 
 func NewExplorer(ctx context.Context, wg *sync.WaitGroup, rpcClient *rpcclient.Client, dbc *storage.DBClient, ipfs *shell.Shell, cfg utils.ExplorerConfig) *Explorer {
+	// The scanner gets its own view of the database so that faults are recorded
+	// for its statements only, not for the API's.
+	dbc, fault := dbc.WithFaultRecorder()
 	exp := &Explorer{
 		node:          rpcClient,
 		dbc:           dbc,
 		ipfs:          ipfs,
 		verify:        NewVerifys(dbc),
+		fault:         fault,
 		currentHeight: cfg.FromBlock,
 		stakeV2Height: cfg.StakeV2Height,
 		nftHeight:     cfg.NftHeight,
@@ -114,6 +135,9 @@ func (e *Explorer) scan() error {
 	blockCount = e.currentHeight + temp
 
 	for ; e.currentHeight < blockCount; e.currentHeight++ {
+		// Faults left by an earlier aborted pass belong to that pass.
+		e.fault.Take()
+
 		err := e.forkBack()
 		if err != nil {
 			return fmt.Errorf("scan forkBack err: %s", err.Error())
@@ -135,6 +159,9 @@ func (e *Explorer) scan() error {
 		if err != nil {
 			return fmt.Errorf("scan ScheduledTasks err: %s", err.Error())
 		}
+		if err := e.fault.Take(); err != nil {
+			return fmt.Errorf("scan %d: %w: %w", e.currentHeight, STORAGE_ERR, err)
+		}
 
 		for _, tx := range block.Tx {
 
@@ -144,286 +171,11 @@ func (e *Explorer) scan() error {
 				return fmt.Errorf("scan GetRawtxvBool err: %s", err.Error())
 			}
 
-			decode, pushedData, err := e.reDecode(txv.Vin[0])
-			if err != nil {
-				log.Trace("scanning", "verifyReDecode", err, "txhash", txv.Txid)
-				continue
+			if err := e.scanTx(tx, txv); err != nil {
+				return err
 			}
-
-			switch decode.P {
-			case "drc-20":
-				drc20, err := e.drc20Decode(txv, pushedData, e.currentHeight)
-				if err != nil {
-					if retryable(err) {
-						return fmt.Errorf("scan %s: %w", txv.Txid, err)
-					}
-					log.Error("scanning", "drc20Decode", err, "txhash", txv.Txid)
-					continue
-				}
-
-				err = e.executeDrc20(drc20)
-				if err != nil {
-					e.dbc.DB.Model(&models.Drc20Info{}).Where("tx_hash = ?", drc20.TxHash).Update("err_info", err.Error())
-					continue
-				}
-
-			case "pair-v1":
-
-				swaps, err := e.swapRouterDecode(txv, e.currentHeight)
-				if err != nil {
-					if retryable(err) {
-						return fmt.Errorf("scan %s: %w", txv.Txid, err)
-					}
-					log.Error("scanning", "swapRouterDecode", err, "txhash", tx)
-					continue
-				}
-
-				err = e.executePairV1(swaps)
-				if err != nil {
-					e.dbc.DB.Model(&models.SwapInfo{}).Where("tx_hash = ?", tx).Update("err_info", err.Error())
-					continue
-				}
-
-			case "wdoge":
-				wdoge, err := e.wdogeDecode(txv, pushedData, e.currentHeight)
-				if err != nil {
-					if retryable(err) {
-						return fmt.Errorf("scan %s: %w", txv.Txid, err)
-					}
-					log.Error("scanning", "wdogeDecode", err, "txhash", txv.Txid)
-					continue
-				}
-
-				err = e.executeWdoge(wdoge)
-				if err != nil {
-					e.dbc.DB.Model(&models.WDogeInfo{}).Where("tx_hash = ?", wdoge.TxHash).Update("err_info", err.Error())
-					continue
-				}
-
-			case "file":
-				file, err := e.fileDecode(txv, e.currentHeight)
-				if err != nil {
-					if retryable(err) {
-						return fmt.Errorf("scan %s: %w", txv.Txid, err)
-					}
-					log.Error("scanning", "nftDecode", err, "txhash", txv.Txid)
-					continue
-				}
-
-				err = e.executeFile(file)
-				if err != nil {
-					e.dbc.DB.Model(&models.FileInfo{}).Where("tx_hash = ?", file.TxHash).Update("err_info", err.Error())
-					continue
-				}
-
-			case "stake-v1":
-				stake, err := e.stakeDecode(txv, pushedData, e.currentHeight)
-				if err != nil {
-					if retryable(err) {
-						return fmt.Errorf("scan %s: %w", txv.Txid, err)
-					}
-					log.Error("scanning", "stakeDecode", err, "txhash", txv.Txid)
-					continue
-				}
-
-				err = e.executeStakeV1(stake)
-				if err != nil {
-					e.dbc.DB.Model(&models.StakeInfo{}).Where("tx_hash = ?", stake.TxHash).Update("err_info", err.Error())
-					continue
-				}
-
-			case "order-v1":
-				ex, err := e.exchangeDecode(txv, pushedData, e.currentHeight)
-				if err != nil {
-					if retryable(err) {
-						return fmt.Errorf("scan %s: %w", txv.Txid, err)
-					}
-					log.Error("scanning", "exchangeDecode", err, "txhash", txv.Txid)
-					continue
-				}
-
-				err = e.executeOrderV1(ex)
-				if err != nil {
-					e.dbc.DB.Model(&models.ExchangeInfo{}).Where("tx_hash = ?", ex.TxHash).Update("err_info", err.Error())
-					continue
-				}
-
-			case "order-v2":
-				ex, err := e.fileExchangeDecode(txv, pushedData, e.currentHeight)
-				if err != nil {
-					if retryable(err) {
-						return fmt.Errorf("scan %s: %w", txv.Txid, err)
-					}
-					log.Error("scanning", "fileExchangeDecode", err, "txhash", txv.Txid)
-					continue
-				}
-
-				err = e.executeOrderV2(ex)
-				if err != nil {
-					e.dbc.DB.Model(&models.FileExchangeInfo{}).Where("tx_hash = ?", ex.TxHash).Update("err_info", err.Error())
-					continue
-				}
-
-			case "box-v1":
-				box, err := e.boxDecode(txv, pushedData, e.currentHeight)
-				if err != nil {
-					if retryable(err) {
-						return fmt.Errorf("scan %s: %w", txv.Txid, err)
-					}
-					log.Error("scanning", "boxDecode", err, "txhash", txv.Txid)
-					continue
-				}
-
-				err = e.executeBoxV1(box)
-				if err != nil {
-					e.dbc.DB.Model(&models.BoxInfo{}).Where("tx_hash = ?", box.TxHash).Update("err_info", err.Error())
-					continue
-				}
-
-			case "cross":
-
-				cross, err := e.crossDecode(txv, pushedData, e.currentHeight)
-				if err != nil {
-					if retryable(err) {
-						return fmt.Errorf("scan %s: %w", txv.Txid, err)
-					}
-					log.Error("scanning", "crossDecode", err, "txhash", txv.Txid)
-					continue
-				}
-
-				err = e.executeCross(cross)
-				if err != nil {
-					e.dbc.DB.Model(&models.CrossInfo{}).Where("tx_hash = ?", cross.TxHash).Update("err_info", err.Error())
-					continue
-				}
-
-			case "meme-20":
-				meme20, err := e.meme20Decode(txv, pushedData, e.currentHeight)
-				if err != nil {
-					if retryable(err) {
-						return fmt.Errorf("scan %s: %w", txv.Txid, err)
-					}
-					log.Error("scanning", "meme20Decode", err, "txhash", txv.Txid)
-					continue
-				}
-
-				err = e.executeMeme20(meme20)
-				if err != nil {
-					e.dbc.DB.Model(&models.Meme20Info{}).Where("tx_hash = ?", meme20.TxHash).Update("err_info", err.Error())
-					continue
-				}
-
-			case "pair-v2":
-
-				swaps, err := e.swapV2RouterDecode(txv, e.currentHeight)
-				if err != nil {
-					if retryable(err) {
-						return fmt.Errorf("scan %s: %w", txv.Txid, err)
-					}
-					log.Error("scanning", "swapV2RouterDecode", err, "txhash", tx)
-					continue
-				}
-
-				err = e.executePairV2(swaps)
-				if err != nil {
-					e.dbc.DB.Model(&models.SwapV2Info{}).Where("tx_hash = ?", tx).Update("err_info", err.Error())
-					continue
-				}
-
-			case "consensus":
-				consensus, err := e.consensusDecode(txv, pushedData, e.currentHeight)
-				if err != nil {
-					if retryable(err) {
-						return fmt.Errorf("scan %s: %w", txv.Txid, err)
-					}
-					log.Error("scanning", "consensusDecode", err, "txhash", txv.Txid)
-					continue
-				}
-
-				err = e.executeConsensus(consensus)
-				if err != nil {
-					e.dbc.DB.Model(&models.ConsensusInfo{}).Where("tx_hash = ?", consensus.TxHash).Update("err_info", err.Error())
-					continue
-				}
-
-			case "pump":
-
-				pump, err := e.pumpDecode(txv, pushedData, e.currentHeight)
-				if err != nil {
-					if retryable(err) {
-						return fmt.Errorf("scan %s: %w", txv.Txid, err)
-					}
-					log.Error("scanning", "pumpDecode", err, "txhash", txv.Txid)
-					continue
-				}
-
-				err = e.executePump(pump)
-				if err != nil {
-					e.dbc.DB.Model(&models.PumpInfo{}).Where("tx_hash = ?", pump.TxHash).Update("err_info", err.Error())
-					continue
-				}
-
-			case "invite":
-
-				invite, err := e.inviteDecode(txv, pushedData, e.currentHeight)
-				if err != nil {
-					if retryable(err) {
-						return fmt.Errorf("scan %s: %w", txv.Txid, err)
-					}
-					log.Error("scanning", "inviteDecode", err, "txhash", txv.Txid)
-					continue
-				}
-
-				err = e.executeInvite(invite)
-				if err != nil {
-					e.dbc.DB.Model(&models.InviteInfo{}).Where("tx_hash = ?", invite.TxHash).Update("err_info", err.Error())
-					continue
-				}
-
-			case "stake-v2":
-				if !activated(e.stakeV2Height, e.currentHeight) {
-					log.Trace("scanning", "stake-v2", "not activated", "txhash", txv.Txid)
-					continue
-				}
-
-				stake, err := e.stakeV2Decode(txv, pushedData, e.currentHeight)
-				if err != nil {
-					if retryable(err) {
-						return fmt.Errorf("scan %s: %w", txv.Txid, err)
-					}
-					log.Error("scanning", "stakeV2Decode", err, "txhash", txv.Txid)
-					continue
-				}
-
-				err = e.executeStakeV2(stake)
-				if err != nil {
-					e.dbc.DB.Model(&models.StakeV2Info{}).Where("tx_hash = ?", stake.TxHash).Update("err_info", err.Error())
-					continue
-				}
-
-			case "nft/ai":
-				if !activated(e.nftHeight, e.currentHeight) {
-					log.Trace("scanning", "nft/ai", "not activated", "txhash", txv.Txid)
-					continue
-				}
-
-				nft, err := e.nftDecode(txv, e.currentHeight)
-				if err != nil {
-					if retryable(err) {
-						return fmt.Errorf("scan %s: %w", txv.Txid, err)
-					}
-					log.Error("scanning", "nftDecode", err, "txhash", txv.Txid)
-					continue
-				}
-
-				err = e.executeNft(nft)
-				if err != nil {
-					e.dbc.DB.Model(&models.NftInfo{}).Where("tx_hash = ?", nft.TxHash).Update("err_info", err.Error())
-					continue
-				}
-
-			default:
-				log.Error("scanning", "op", "not found", "txhash", txv.Txid)
+			if err := e.fault.Take(); err != nil {
+				return fmt.Errorf("scan %s: %w: %w", txv.Txid, STORAGE_ERR, err)
 			}
 		}
 
@@ -438,6 +190,278 @@ func (e *Explorer) scan() error {
 		}
 
 		log.Info("explorer", "scanning end ", e.currentHeight)
+	}
+	return nil
+}
+
+// scanTx decodes and executes one transaction. A returned error aborts the block so it is
+// scanned again; an inscription that is merely invalid is recorded and nil is returned.
+func (e *Explorer) scanTx(tx string, txv *btcjson.TxRawResult) error {
+
+	decode, pushedData, err := e.reDecode(txv.Vin[0])
+	if err != nil {
+		log.Trace("scanning", "verifyReDecode", err, "txhash", txv.Txid)
+		return nil
+	}
+
+	switch decode.P {
+	case "drc-20":
+		drc20, err := e.drc20Decode(txv, pushedData, e.currentHeight)
+		if err != nil {
+			if retryable(err) {
+				return fmt.Errorf("scan %s: %w", txv.Txid, err)
+			}
+			log.Error("scanning", "drc20Decode", err, "txhash", txv.Txid)
+			return nil
+		}
+
+		err = e.executeDrc20(drc20)
+		if err != nil {
+			return e.failTx(&models.Drc20Info{}, drc20.TxHash, err)
+		}
+
+	case "pair-v1":
+
+		swaps, err := e.swapRouterDecode(txv, e.currentHeight)
+		if err != nil {
+			if retryable(err) {
+				return fmt.Errorf("scan %s: %w", txv.Txid, err)
+			}
+			log.Error("scanning", "swapRouterDecode", err, "txhash", tx)
+			return nil
+		}
+
+		err = e.executePairV1(swaps)
+		if err != nil {
+			return e.failTx(&models.SwapInfo{}, tx, err)
+		}
+
+	case "wdoge":
+		wdoge, err := e.wdogeDecode(txv, pushedData, e.currentHeight)
+		if err != nil {
+			if retryable(err) {
+				return fmt.Errorf("scan %s: %w", txv.Txid, err)
+			}
+			log.Error("scanning", "wdogeDecode", err, "txhash", txv.Txid)
+			return nil
+		}
+
+		err = e.executeWdoge(wdoge)
+		if err != nil {
+			return e.failTx(&models.WDogeInfo{}, wdoge.TxHash, err)
+		}
+
+	case "file":
+		file, err := e.fileDecode(txv, e.currentHeight)
+		if err != nil {
+			if retryable(err) {
+				return fmt.Errorf("scan %s: %w", txv.Txid, err)
+			}
+			log.Error("scanning", "nftDecode", err, "txhash", txv.Txid)
+			return nil
+		}
+
+		err = e.executeFile(file)
+		if err != nil {
+			return e.failTx(&models.FileInfo{}, file.TxHash, err)
+		}
+
+	case "stake-v1":
+		stake, err := e.stakeDecode(txv, pushedData, e.currentHeight)
+		if err != nil {
+			if retryable(err) {
+				return fmt.Errorf("scan %s: %w", txv.Txid, err)
+			}
+			log.Error("scanning", "stakeDecode", err, "txhash", txv.Txid)
+			return nil
+		}
+
+		err = e.executeStakeV1(stake)
+		if err != nil {
+			return e.failTx(&models.StakeInfo{}, stake.TxHash, err)
+		}
+
+	case "order-v1":
+		ex, err := e.exchangeDecode(txv, pushedData, e.currentHeight)
+		if err != nil {
+			if retryable(err) {
+				return fmt.Errorf("scan %s: %w", txv.Txid, err)
+			}
+			log.Error("scanning", "exchangeDecode", err, "txhash", txv.Txid)
+			return nil
+		}
+
+		err = e.executeOrderV1(ex)
+		if err != nil {
+			return e.failTx(&models.ExchangeInfo{}, ex.TxHash, err)
+		}
+
+	case "order-v2":
+		ex, err := e.fileExchangeDecode(txv, pushedData, e.currentHeight)
+		if err != nil {
+			if retryable(err) {
+				return fmt.Errorf("scan %s: %w", txv.Txid, err)
+			}
+			log.Error("scanning", "fileExchangeDecode", err, "txhash", txv.Txid)
+			return nil
+		}
+
+		err = e.executeOrderV2(ex)
+		if err != nil {
+			return e.failTx(&models.FileExchangeInfo{}, ex.TxHash, err)
+		}
+
+	case "box-v1":
+		box, err := e.boxDecode(txv, pushedData, e.currentHeight)
+		if err != nil {
+			if retryable(err) {
+				return fmt.Errorf("scan %s: %w", txv.Txid, err)
+			}
+			log.Error("scanning", "boxDecode", err, "txhash", txv.Txid)
+			return nil
+		}
+
+		err = e.executeBoxV1(box)
+		if err != nil {
+			return e.failTx(&models.BoxInfo{}, box.TxHash, err)
+		}
+
+	case "cross":
+
+		cross, err := e.crossDecode(txv, pushedData, e.currentHeight)
+		if err != nil {
+			if retryable(err) {
+				return fmt.Errorf("scan %s: %w", txv.Txid, err)
+			}
+			log.Error("scanning", "crossDecode", err, "txhash", txv.Txid)
+			return nil
+		}
+
+		err = e.executeCross(cross)
+		if err != nil {
+			return e.failTx(&models.CrossInfo{}, cross.TxHash, err)
+		}
+
+	case "meme-20":
+		meme20, err := e.meme20Decode(txv, pushedData, e.currentHeight)
+		if err != nil {
+			if retryable(err) {
+				return fmt.Errorf("scan %s: %w", txv.Txid, err)
+			}
+			log.Error("scanning", "meme20Decode", err, "txhash", txv.Txid)
+			return nil
+		}
+
+		err = e.executeMeme20(meme20)
+		if err != nil {
+			return e.failTx(&models.Meme20Info{}, meme20.TxHash, err)
+		}
+
+	case "pair-v2":
+
+		swaps, err := e.swapV2RouterDecode(txv, e.currentHeight)
+		if err != nil {
+			if retryable(err) {
+				return fmt.Errorf("scan %s: %w", txv.Txid, err)
+			}
+			log.Error("scanning", "swapV2RouterDecode", err, "txhash", tx)
+			return nil
+		}
+
+		err = e.executePairV2(swaps)
+		if err != nil {
+			return e.failTx(&models.SwapV2Info{}, tx, err)
+		}
+
+	case "consensus":
+		consensus, err := e.consensusDecode(txv, pushedData, e.currentHeight)
+		if err != nil {
+			if retryable(err) {
+				return fmt.Errorf("scan %s: %w", txv.Txid, err)
+			}
+			log.Error("scanning", "consensusDecode", err, "txhash", txv.Txid)
+			return nil
+		}
+
+		err = e.executeConsensus(consensus)
+		if err != nil {
+			return e.failTx(&models.ConsensusInfo{}, consensus.TxHash, err)
+		}
+
+	case "pump":
+
+		pump, err := e.pumpDecode(txv, pushedData, e.currentHeight)
+		if err != nil {
+			if retryable(err) {
+				return fmt.Errorf("scan %s: %w", txv.Txid, err)
+			}
+			log.Error("scanning", "pumpDecode", err, "txhash", txv.Txid)
+			return nil
+		}
+
+		err = e.executePump(pump)
+		if err != nil {
+			return e.failTx(&models.PumpInfo{}, pump.TxHash, err)
+		}
+
+	case "invite":
+
+		invite, err := e.inviteDecode(txv, pushedData, e.currentHeight)
+		if err != nil {
+			if retryable(err) {
+				return fmt.Errorf("scan %s: %w", txv.Txid, err)
+			}
+			log.Error("scanning", "inviteDecode", err, "txhash", txv.Txid)
+			return nil
+		}
+
+		err = e.executeInvite(invite)
+		if err != nil {
+			return e.failTx(&models.InviteInfo{}, invite.TxHash, err)
+		}
+
+	case "stake-v2":
+		if !activated(e.stakeV2Height, e.currentHeight) {
+			log.Trace("scanning", "stake-v2", "not activated", "txhash", txv.Txid)
+			return nil
+		}
+
+		stake, err := e.stakeV2Decode(txv, pushedData, e.currentHeight)
+		if err != nil {
+			if retryable(err) {
+				return fmt.Errorf("scan %s: %w", txv.Txid, err)
+			}
+			log.Error("scanning", "stakeV2Decode", err, "txhash", txv.Txid)
+			return nil
+		}
+
+		err = e.executeStakeV2(stake)
+		if err != nil {
+			return e.failTx(&models.StakeV2Info{}, stake.TxHash, err)
+		}
+
+	case "nft/ai":
+		if !activated(e.nftHeight, e.currentHeight) {
+			log.Trace("scanning", "nft/ai", "not activated", "txhash", txv.Txid)
+			return nil
+		}
+
+		nft, err := e.nftDecode(txv, e.currentHeight)
+		if err != nil {
+			if retryable(err) {
+				return fmt.Errorf("scan %s: %w", txv.Txid, err)
+			}
+			log.Error("scanning", "nftDecode", err, "txhash", txv.Txid)
+			return nil
+		}
+
+		err = e.executeNft(nft)
+		if err != nil {
+			return e.failTx(&models.NftInfo{}, nft.TxHash, err)
+		}
+
+	default:
+		log.Error("scanning", "op", "not found", "txhash", txv.Txid)
 	}
 	return nil
 }
@@ -1085,7 +1109,11 @@ func (e *Explorer) executePump(pump *models.PumpInfo) error {
 			return fmt.Errorf("wdogeDepositPump err: %s", err.Error())
 		}
 
-		dbtxw.Commit()
+		err = dbtxw.Commit().Error
+		if err != nil {
+			dbtxw.Rollback()
+			return fmt.Errorf("wdogeDepositPump commit err: %s", err.Error())
+		}
 	}
 
 	dbtx := e.dbc.DB.Begin()
