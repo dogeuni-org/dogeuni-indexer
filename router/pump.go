@@ -6,8 +6,10 @@ import (
 	"dogeuni-indexer/utils"
 	"errors"
 	"github.com/dogecoinw/doged/rpcclient"
+	"github.com/dogecoinw/go-dogecoin/log"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 	"net/http"
 	"time"
 )
@@ -15,12 +17,21 @@ import (
 type PumpRouter struct {
 	dbc  *storage.DBClient
 	node *rpcclient.Client
+	// tg_bot is an external schema (telegram bot data) that only exists alongside the MySQL deployment
+	hasTgBot bool
 }
 
 func NewPumpRouter(db *storage.DBClient, node *rpcclient.Client) *PumpRouter {
+	probe := db.DB.Session(&gorm.Session{Logger: logger.Discard})
+	hasTgBot := probe.Exec("SELECT 1 FROM tg_bot.account LIMIT 1").Error == nil &&
+		probe.Exec("SELECT 1 FROM tg_bot.user_chat LIMIT 1").Error == nil
+	if !hasTgBot {
+		log.Warn("router", "NewPumpRouter", "tg_bot schema not available, pump board/king return without replies and creator profile")
+	}
 	return &PumpRouter{
-		dbc:  db,
-		node: node,
+		dbc:      db,
+		node:     node,
+		hasTgBot: hasTgBot,
 	}
 }
 
@@ -294,13 +305,22 @@ func (r *PumpRouter) Board(c *gin.Context) {
 	startDate := time.Now()
 	timeStamp := time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, startDate.Location()).Unix()
 
+	tgBotSelect := "uca.profile_photo, uca.user_name, uca.bio, " +
+		"(SELECT COUNT(id) FROM tg_bot.user_chat WHERE tg_bot.user_chat.tick_id = mc.tick_id) AS replies, "
+	if !r.hasTgBot {
+		tgBotSelect = "'' AS profile_photo, '' AS user_name, '' AS bio, 0 AS replies, "
+	}
+
 	subQuery := r.dbc.DB.Table("pump_liquidity as pl").
-		Select("mc.tick, mc.tick_id, mc.logo, mc.reserve, mc.tag, mc.twitter, mc.telegram, mc.discord, mc.website, mc.youtube, mc.tiktok, mc.name, mc.description, mc.holder_address, mc.transactions, svs.price_change, svs.base_volume, pl.amt0, pl.amt1, pl.amt0/pl.amt1 as price, pl.holder_address, pl.king_date, pl.create_date, sl.amt0 as swap_amt0, sl.amt1 as swap_amt1,  uca.profile_photo, uca.user_name, uca.bio, "+
-			"(SELECT COUNT(id) FROM tg_bot.user_chat WHERE tg_bot.user_chat.tick_id = mc.tick_id) AS replies, "+
+		Select("mc.tick, mc.tick_id, mc.logo, mc.reserve, mc.tag, mc.twitter, mc.telegram, mc.discord, mc.website, mc.youtube, mc.tiktok, mc.name, mc.description, mc.holder_address, mc.transactions, svs.price_change, svs.base_volume, pl.amt0, pl.amt1, pl.amt0/pl.amt1 as price, pl.holder_address, pl.king_date, pl.create_date, sl.amt0 as swap_amt0, sl.amt1 as swap_amt1, " +
+			tgBotSelect +
 			"(SELECT COUNT(id) FROM meme20_collect_address WHERE tick_id = pl.tick0_id and amt != '0') AS holders").
 		Joins("left join meme20_collect as mc on pl.tick0_id = mc.tick_id").
-		Joins("left join swap_v2_liquidity as sl on pl.tick0_id = sl.tick0_id and sl.tick1_id = 'WDOGE(WRAPPED-DOGE)'").
-		Joins("left join (SELECT * from tg_bot.account where id in (SELECT max(id) from tg_bot.account group by address)) as uca on uca.address = mc.holder_address").
+		Joins("left join swap_v2_liquidity as sl on pl.tick0_id = sl.tick0_id and sl.tick1_id = 'WDOGE(WRAPPED-DOGE)'")
+	if r.hasTgBot {
+		subQuery = subQuery.Joins("left join (SELECT * from tg_bot.account where id in (SELECT max(id) from tg_bot.account group by address)) as uca on uca.address = mc.holder_address")
+	}
+	subQuery = subQuery.
 		Joins("left join (WITH RankedRecords AS (SELECT tick_id, COALESCE(((close_price - open_price) / open_price) * 100, 0) AS price_change, base_volume, date_interval, ROW_NUMBER() OVER (PARTITION BY tick_id ORDER BY id DESC) as rn FROM swap_v2_summary where date_interval = '1d' and last_date = ?) SELECT * FROM RankedRecords WHERE rn = 1) as svs on svs.tick_id = pl.tick0_id", time.Unix(timeStamp, 0).Format("2006-01-02 15:04:05"))
 
 	if params.SearchKey != "" {
@@ -612,10 +632,15 @@ func (r *PumpRouter) King(c *gin.Context) {
 		CreateDate    models.LocalTime `json:"create_date"`
 	}
 
+	repliesSelect := "(SELECT COUNT(id) FROM tg_bot.user_chat WHERE tg_bot.user_chat.tick_id = mc.tick_id) AS replies"
+	if !r.hasTgBot {
+		repliesSelect = "0 AS replies"
+	}
+
 	king := make([]King, 0)
 	err := r.dbc.DB.Table("pump_liquidity as pl").
 		Select("mc.tick_id, mc.tick, mc.logo, mc.name, mc.holder_address, mc.transactions, pl.king_date, pl.update_date, pl.create_date, pl.amt0, pl.amt1, sl.amt0 as swap_amt0, sl.amt1 as swap_amt1," +
-			"(SELECT COUNT(id) FROM tg_bot.user_chat WHERE tg_bot.user_chat.tick_id = mc.tick_id) AS replies").
+			repliesSelect).
 		Joins("left join meme20_collect as mc on pl.tick0_id = mc.tick_id").
 		Joins("left join swap_v2_liquidity as sl on pl.tick0_id = sl.tick0_id and sl.tick1_id = 'WDOGE(WRAPPED-DOGE)'").
 		Order("pl.king_date desc").Limit(params.Limit).Offset(params.OffSet).Find(&king).Error

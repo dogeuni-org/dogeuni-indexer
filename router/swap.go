@@ -591,8 +591,6 @@ func (r *SwapRouter) SwapPair(c *gin.Context) {
 		Joins("LEFT JOIN swap_liquidity sl ON es.tick = sl.tick").
 		Order("es.liquidity DESC")
 
-	mainQuery = mainQuery
-
 	var totalCount int64
 	mainQuery.Count(&totalCount).Limit(p.Limit).Offset(p.OffSet).Scan(&results)
 
