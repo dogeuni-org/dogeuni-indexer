@@ -137,6 +137,11 @@ func (e *Explorer) scan() error {
 	blockCount = e.currentHeight + temp
 
 	for ; e.currentHeight < blockCount; e.currentHeight++ {
+		// Stop between blocks, so shutdown does not wait for the whole batch.
+		if e.ctx.Err() != nil {
+			return nil
+		}
+
 		// Faults left by an earlier aborted pass belong to that pass.
 		e.fault.Take()
 
