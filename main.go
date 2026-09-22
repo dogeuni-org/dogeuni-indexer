@@ -12,10 +12,13 @@ import (
 	"github.com/dogecoinw/go-dogecoin/log"
 	"github.com/gin-gonic/gin"
 	shell "github.com/ipfs/go-ipfs-api"
+	"net"
+	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"sync"
+	"sync/atomic"
 	"syscall"
 )
 
@@ -32,8 +35,11 @@ func main() {
 	glogger.Verbosity(log.Lvl(cfg.DebugLevel))
 	log.Root().SetHandler(glogger)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	// Stop on the first signal; stop() restores the default, so a second one kills.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	wg := &sync.WaitGroup{}
+	var failed atomic.Bool
 
 	mysqlClient := storage_v3.NewSqliteClient(cfg.Sqlite)
 
@@ -59,15 +65,10 @@ func main() {
 
 	ipfs := shell.NewShell(cfg.Ipfs)
 
-	if cfg.Explorer.Switch {
-		exp := explorer.NewExplorer(ctx, wg, rpcClient, dbClient, ipfs, cfg.Explorer)
-		wg.Add(1)
-		go exp.Start()
-	}
-
+	var levelClient *storage.LevelDB
 	if cfg.HttpServer.Switch {
 
-		levelClient := storage.NewLevelDB(cfg.LevelDB)
+		levelClient = storage.NewLevelDB(cfg.LevelDB)
 
 		grt := gin.Default()
 		grt.Use(func(c *gin.Context) {
@@ -275,18 +276,43 @@ func main() {
 			v4.POST("/consensus/score", consensusRouter.Score)
 		}
 
-		err := grt.Run(cfg.HttpServer.Server)
+		// Bind before the scanner starts, so a busy port fails the process up front.
+		ln, err := net.Listen("tcp", httpAddr(cfg.HttpServer.Server))
 		if err != nil {
-			panic(err)
+			log.Crit("http", "listen", err)
 		}
+		log.Info("http", "listening", ln.Addr().String())
+		srv := &http.Server{Handler: grt.Handler()}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := serveHTTP(ctx, srv, ln, shutdownTimeout); err != nil {
+				log.Error("http", "serve", err)
+				failed.Store(true)
+				stop()
+			}
+		}()
 	}
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		println("\nReceived an interrupt, stopping services...")
-		cancel()
-	}()
+	if cfg.Explorer.Switch {
+		exp := explorer.NewExplorer(ctx, wg, rpcClient, dbClient, ipfs, cfg.Explorer)
+		wg.Add(1)
+		go exp.Start()
+	}
+
+	<-ctx.Done()
+	stop()
+	log.Warn("main", "shutdown", "stopping services")
 	wg.Wait()
+
+	if sqlDB, err := dbClient.DB.DB(); err == nil {
+		sqlDB.Close()
+	}
+	mysqlClient.MysqlDB.Close()
+	if levelClient != nil {
+		levelClient.DB.Close()
+	}
+	if failed.Load() {
+		os.Exit(1)
+	}
 }
