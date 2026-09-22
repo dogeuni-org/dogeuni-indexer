@@ -18,8 +18,11 @@ import (
 func (e *Explorer) drc20Decode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.Drc20Info, error) {
 
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Hash).First(&models.Drc20Info{}).Error
+	if err == nil {
+		return nil, fmt.Errorf("drc20 already exist %s", tx.Hash)
+	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, fmt.Errorf("drc20 already exist or err %s", tx.Hash)
+		return nil, fmt.Errorf("%w: dedup: %v", STORAGE_ERR, err)
 	}
 
 	param := &models.Drc20Inscription{}
@@ -43,7 +46,10 @@ func (e *Explorer) drc20Decode(tx *btcjson.TxRawResult, pushedData []byte, numbe
 	card.OrderStatus = 1
 
 	if card.Op == "deploy" {
-		card.HolderAddress = tx.Vout[0].ScriptPubKey.Addresses[0]
+		card.HolderAddress, err = outputAddress(tx, 0)
+		if err != nil {
+			return nil, err
+		}
 		if tx.Vout[0].Value != 0.001 {
 			return nil, fmt.Errorf("the amount of tokens exceeds the 0.0001")
 		}
@@ -51,7 +57,10 @@ func (e *Explorer) drc20Decode(tx *btcjson.TxRawResult, pushedData []byte, numbe
 
 	if card.Op == "mint" {
 
-		card.HolderAddress = tx.Vout[0].ScriptPubKey.Addresses[0]
+		card.HolderAddress, err = outputAddress(tx, 0)
+		if err != nil {
+			return nil, err
+		}
 		card.Repeat = int64(tx.Vout[0].Value / 0.001)
 		if card.Repeat > 30 {
 			card.Repeat = 30
@@ -66,7 +75,7 @@ func (e *Explorer) drc20Decode(tx *btcjson.TxRawResult, pushedData []byte, numbe
 	txhash0, _ := chainhash.NewHashFromStr(tx.Vin[0].Txid)
 	txRawResult0, err := e.node.GetRawTransactionVerboseBool(txhash0)
 	if err != nil {
-		return nil, fmt.Errorf("GetRawTransactionVerboseBool err: %s", err.Error())
+		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 	}
 
 	if card.Op == "transfer" {
@@ -74,19 +83,32 @@ func (e *Explorer) drc20Decode(tx *btcjson.TxRawResult, pushedData []byte, numbe
 		txhash1, _ := chainhash.NewHashFromStr(txRawResult0.Vin[0].Txid)
 		txRawResult1, err := e.node.GetRawTransactionVerboseBool(txhash1)
 		if err != nil {
-			return nil, fmt.Errorf("GetRawTransactionVerboseBool err: %s", err.Error())
+			return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 		}
 
-		card.HolderAddress = txRawResult1.Vout[txRawResult0.Vin[0].Vout].ScriptPubKey.Addresses[0]
-		card.ToAddress = tx.Vout[0].ScriptPubKey.Addresses[0]
+		card.HolderAddress, err = outputAddress(txRawResult1, int(txRawResult0.Vin[0].Vout))
+		if err != nil {
+			return nil, err
+		}
+		card.ToAddress, err = outputAddress(tx, 0)
+		if err != nil {
+			return nil, err
+		}
 		if len(tx.Vout) > 2 {
 			for i := 1; i < len(tx.Vout)-1; i++ {
-				card.ToAddress += ("," + tx.Vout[i].ScriptPubKey.Addresses[0])
+				to, err := outputAddress(tx, i)
+				if err != nil {
+					return nil, err
+				}
+				card.ToAddress += ("," + to)
 			}
 		}
 	}
 
-	card.FeeAddress = txRawResult0.Vout[tx.Vin[0].Vout].ScriptPubKey.Addresses[0]
+	card.FeeAddress, err = outputAddress(txRawResult0, int(tx.Vin[0].Vout))
+	if err != nil {
+		return nil, err
+	}
 
 	for _, v := range strings.Split(card.ToAddress, ",") {
 		if card.HolderAddress == v {
@@ -96,7 +118,7 @@ func (e *Explorer) drc20Decode(tx *btcjson.TxRawResult, pushedData []byte, numbe
 
 	err = e.dbc.DB.Save(card).Error
 	if err != nil {
-		return nil, fmt.Errorf("save err: %s", err.Error())
+		return nil, fmt.Errorf("%w: save inscription: %v", STORAGE_ERR, err)
 	}
 
 	return card, nil
@@ -213,6 +235,36 @@ func (e *Explorer) drc20Fork(tx *gorm.DB, height int64) error {
 				return fmt.Errorf("drc20 fork transfer error: %v", err)
 			}
 		}
+	}
+
+	return nil
+}
+
+// drc20DeployFork removes the ticks registered by the given drc-20 deploy txs
+func (e *Explorer) drc20DeployFork(tx *gorm.DB, deployHashes []string) error {
+	if len(deployHashes) == 0 {
+		return nil
+	}
+
+	var ticks []string
+	err := tx.Model(&models.Drc20Collect{}).Where("tx_hash IN ?", deployHashes).Pluck("tick", &ticks).Error
+	if err != nil {
+		return fmt.Errorf("drc20DeployFork find error: %v", err)
+	}
+	if len(ticks) == 0 {
+		return nil
+	}
+
+	log.Info("fork", "drc20 deploy", ticks)
+
+	err = tx.Where("tick IN ?", ticks).Delete(&models.Drc20CollectAddress{}).Error
+	if err != nil {
+		return fmt.Errorf("drc20DeployFork address error: %v", err)
+	}
+
+	err = tx.Where("tick IN ?", ticks).Delete(&models.Drc20Collect{}).Error
+	if err != nil {
+		return fmt.Errorf("drc20DeployFork collect error: %v", err)
 	}
 
 	return nil

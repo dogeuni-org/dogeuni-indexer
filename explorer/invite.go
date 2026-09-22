@@ -17,8 +17,11 @@ import (
 func (e *Explorer) inviteDecode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.InviteInfo, error) {
 
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Hash).First(&models.InviteInfo{}).Error
+	if err == nil {
+		return nil, fmt.Errorf("InviteInfo already exist %s", tx.Hash)
+	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, fmt.Errorf("InviteInfo already exist or err %s", tx.Hash)
+		return nil, fmt.Errorf("%w: dedup: %v", STORAGE_ERR, err)
 	}
 
 	param := &models.InviteInscription{}
@@ -43,29 +46,37 @@ func (e *Explorer) inviteDecode(tx *btcjson.TxRawResult, pushedData []byte, numb
 	txhash0, _ := chainhash.NewHashFromStr(tx.Vin[0].Txid)
 	txRawResult0, err := e.node.GetRawTransactionVerboseBool(txhash0)
 	if err != nil {
-		return nil, fmt.Errorf("GetRawTransactionVerboseBool err: %s", err.Error())
+		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 	}
 
 	txhash1, _ := chainhash.NewHashFromStr(txRawResult0.Vin[0].Txid)
 	txRawResult1, err := e.node.GetRawTransactionVerboseBool(txhash1)
 	if err != nil {
-		return nil, fmt.Errorf("GetRawTransactionVerboseBool err: %s", err.Error())
+		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 	}
 
-	invite.HolderAddress = tx.Vout[0].ScriptPubKey.Addresses[0]
+	invite.HolderAddress, err = outputAddress(tx, 0)
+	if err != nil {
+		return nil, err
+	}
 	if tx.Vout[0].Value != 0.001 {
 		return nil, fmt.Errorf("the amount of tokens exceeds the 0.0001")
 	}
 
-	if invite.HolderAddress != txRawResult1.Vout[txRawResult0.Vin[0].Vout].ScriptPubKey.Addresses[0] {
+	if addr, err := outputAddress(txRawResult1, int(txRawResult0.Vin[0].Vout)); err != nil {
+		return nil, err
+	} else if invite.HolderAddress != addr {
 		return nil, fmt.Errorf("the address is not the same as the previous transaction")
 	}
 
-	invite.FeeAddress = txRawResult0.Vout[tx.Vin[0].Vout].ScriptPubKey.Addresses[0]
+	invite.FeeAddress, err = outputAddress(txRawResult0, int(tx.Vin[0].Vout))
+	if err != nil {
+		return nil, err
+	}
 
 	err = e.dbc.DB.Save(invite).Error
 	if err != nil {
-		return nil, fmt.Errorf("save err: %s", err.Error())
+		return nil, fmt.Errorf("%w: save inscription: %v", STORAGE_ERR, err)
 	}
 
 	return invite, nil

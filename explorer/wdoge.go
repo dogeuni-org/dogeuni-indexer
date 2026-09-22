@@ -16,8 +16,11 @@ import (
 func (e *Explorer) wdogeDecode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.WDogeInfo, error) {
 
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Txid).First(&models.WDogeInfo{}).Error
+	if err == nil {
+		return nil, fmt.Errorf("wdoge already exist %s", tx.Txid)
+	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, fmt.Errorf("wdoge already exist or err %s", tx.Txid)
+		return nil, fmt.Errorf("%w: dedup: %v", STORAGE_ERR, err)
 	}
 
 	param := &models.WDogeInscription{}
@@ -53,7 +56,9 @@ func (e *Explorer) wdogeDecode(tx *btcjson.TxRawResult, pushedData []byte, numbe
 			return nil, fmt.Errorf("the amount of tokens is incorrect %f %s", tx.Vout[1].Value, utils.Float64ToBigInt(tx.Vout[1].Value*100000000).String())
 		}
 
-		if tx.Vout[1].ScriptPubKey.Addresses[0] != wdogeCoolAddress {
+		if addr, err := outputAddress(tx, 1); err != nil {
+			return nil, err
+		} else if addr != wdogeCoolAddress {
 			return nil, fmt.Errorf("the address is incorrect")
 		}
 
@@ -61,7 +66,9 @@ func (e *Explorer) wdogeDecode(tx *btcjson.TxRawResult, pushedData []byte, numbe
 			return nil, fmt.Errorf("the amount of tokens is incorrect fee %f", tx.Vout[2].Value)
 		}
 
-		if tx.Vout[2].ScriptPubKey.Addresses[0] != wdogeFeeAddress {
+		if addr, err := outputAddress(tx, 2); err != nil {
+			return nil, err
+		} else if addr != wdogeFeeAddress {
 			return nil, fmt.Errorf("the address is incorrect")
 		}
 	}
@@ -72,27 +79,32 @@ func (e *Explorer) wdogeDecode(tx *btcjson.TxRawResult, pushedData []byte, numbe
 	wdoge.BlockHash = tx.BlockHash
 	wdoge.BlockNumber = number
 	wdoge.OrderStatus = 1
-	wdoge.HolderAddress = tx.Vout[0].ScriptPubKey.Addresses[0]
+	wdoge.HolderAddress, err = outputAddress(tx, 0)
+	if err != nil {
+		return nil, err
+	}
 
 	txhash0, _ := chainhash.NewHashFromStr(tx.Vin[0].Txid)
 	txRawResult0, err := e.node.GetRawTransactionVerboseBool(txhash0)
 	if err != nil {
-		return nil, CHAIN_NETWORK_ERR
+		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 	}
 
 	txhash1, _ := chainhash.NewHashFromStr(txRawResult0.Vin[0].Txid)
 	txRawResult1, err := e.node.GetRawTransactionVerboseBool(txhash1)
 	if err != nil {
-		return nil, CHAIN_NETWORK_ERR
+		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 	}
 
-	if wdoge.HolderAddress != txRawResult1.Vout[txRawResult0.Vin[0].Vout].ScriptPubKey.Addresses[0] {
+	if addr, err := outputAddress(txRawResult1, int(txRawResult0.Vin[0].Vout)); err != nil {
+		return nil, err
+	} else if wdoge.HolderAddress != addr {
 		return nil, fmt.Errorf("the address is not the same as the previous transaction")
 	}
 
 	err = e.dbc.DB.Create(wdoge).Error
 	if err != nil {
-		return nil, fmt.Errorf("InstallWDogeInfo err: %s", err.Error())
+		return nil, fmt.Errorf("%w: save inscription: %v", STORAGE_ERR, err)
 	}
 
 	return wdoge, nil

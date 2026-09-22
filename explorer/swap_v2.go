@@ -17,8 +17,11 @@ import (
 func (e *Explorer) swapV2RouterDecode(tx *btcjson.TxRawResult, height int64) ([]*models.SwapV2Info, error) {
 
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Hash).First(&models.SwapV2Info{}).Error
+	if err == nil {
+		return nil, fmt.Errorf("swap already exist %s", tx.Hash)
+	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, fmt.Errorf("swap already exist or err %s", tx.Hash)
+		return nil, fmt.Errorf("%w: dedup: %v", STORAGE_ERR, err)
 	}
 
 	temp := 0
@@ -77,30 +80,38 @@ func (e *Explorer) swapV2RouterDecode(tx *btcjson.TxRawResult, height int64) ([]
 		swap.BlockHash = tx.BlockHash
 		swap.BlockNumber = height
 		swap.BlockTime = tx.Blocktime
-		swap.HolderAddress = tx.Vout[0].ScriptPubKey.Addresses[0]
+		swap.HolderAddress, err = outputAddress(tx, 0)
+		if err != nil {
+			return nil, err
+		}
 		swap.OrderStatus = 1
 
 		txhash0, _ := chainhash.NewHashFromStr(swap.FeeTxHash)
 		txRawResult0, err := e.node.GetRawTransactionVerboseBool(txhash0)
 		if err != nil {
-			return nil, CHAIN_NETWORK_ERR
+			return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 		}
 
-		swap.FeeAddress = txRawResult0.Vout[swap.FeeTxIndex].ScriptPubKey.Addresses[0]
+		swap.FeeAddress, err = outputAddress(txRawResult0, int(swap.FeeTxIndex))
+		if err != nil {
+			return nil, err
+		}
 
 		txhash1, _ := chainhash.NewHashFromStr(txRawResult0.Vin[0].Txid)
 		txRawResult1, err := e.node.GetRawTransactionVerboseBool(txhash1)
 		if err != nil {
-			return nil, CHAIN_NETWORK_ERR
+			return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 		}
 
-		if swap.HolderAddress != txRawResult1.Vout[txRawResult0.Vin[0].Vout].ScriptPubKey.Addresses[0] {
+		if addr, err := outputAddress(txRawResult1, int(txRawResult0.Vin[0].Vout)); err != nil {
+			return nil, err
+		} else if swap.HolderAddress != addr {
 			return nil, fmt.Errorf("the address is not the same as the previous transaction")
 		}
 
 		err = e.dbc.DB.Create(swap).Error
 		if err != nil {
-			return nil, fmt.Errorf("swap create err: %s", err.Error())
+			return nil, fmt.Errorf("%w: save inscription: %v", STORAGE_ERR, err)
 		}
 
 		swaps = append(swaps, swap)
@@ -122,7 +133,9 @@ func (e *Explorer) swapV2RouterDecode(tx *btcjson.TxRawResult, height int64) ([]
 			return nil, fmt.Errorf("the amount of tokens is incorrect %f %s", tx.Vout[1].Value, utils.Float64ToBigInt(tx.Vout[1].Value*100000000).String())
 		}
 
-		if tx.Vout[1].ScriptPubKey.Addresses[0] != wdogeCoolAddress {
+		if addr, err := outputAddress(tx, 1); err != nil {
+			return nil, err
+		} else if addr != wdogeCoolAddress {
 			return nil, fmt.Errorf("the address is incorrect")
 		}
 
@@ -130,7 +143,9 @@ func (e *Explorer) swapV2RouterDecode(tx *btcjson.TxRawResult, height int64) ([]
 			return nil, fmt.Errorf("the amount of tokens is incorrect fee %f", tx.Vout[2].Value)
 		}
 
-		if tx.Vout[2].ScriptPubKey.Addresses[0] != wdogeFeeAddress {
+		if addr, err := outputAddress(tx, 2); err != nil {
+			return nil, err
+		} else if addr != wdogeFeeAddress {
 			return nil, fmt.Errorf("the address is incorrect")
 		}
 	}

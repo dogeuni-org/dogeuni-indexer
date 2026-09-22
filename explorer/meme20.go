@@ -16,8 +16,11 @@ import (
 func (e *Explorer) meme20Decode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.Meme20Info, error) {
 
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Hash).First(&models.Meme20Info{}).Error
+	if err == nil {
+		return nil, fmt.Errorf("meme20 already exist %s", tx.Hash)
+	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, fmt.Errorf("meme20 already exist or err %s", tx.Hash)
+		return nil, fmt.Errorf("%w: dedup: %v", STORAGE_ERR, err)
 	}
 
 	param := &models.Meme20Inscription{}
@@ -42,37 +45,51 @@ func (e *Explorer) meme20Decode(tx *btcjson.TxRawResult, pushedData []byte, numb
 	txhash0, _ := chainhash.NewHashFromStr(tx.Vin[0].Txid)
 	txRawResult0, err := e.node.GetRawTransactionVerboseBool(txhash0)
 	if err != nil {
-		return nil, fmt.Errorf("GetRawTransactionVerboseBool err: %s", err.Error())
+		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 	}
 
 	txhash1, _ := chainhash.NewHashFromStr(txRawResult0.Vin[0].Txid)
 	txRawResult1, err := e.node.GetRawTransactionVerboseBool(txhash1)
 	if err != nil {
-		return nil, fmt.Errorf("GetRawTransactionVerboseBool err: %s", err.Error())
+		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 	}
 
 	if meme.Op == "deploy" {
-		meme.HolderAddress = tx.Vout[0].ScriptPubKey.Addresses[0]
+		meme.HolderAddress, err = outputAddress(tx, 0)
+		if err != nil {
+			return nil, err
+		}
 		meme.TickId = tx.Hash
 		if tx.Vout[0].Value != 0.001 {
 			return nil, fmt.Errorf("the amount of tokens exceeds the 0.0001")
 		}
 
-		if meme.HolderAddress != txRawResult1.Vout[txRawResult0.Vin[0].Vout].ScriptPubKey.Addresses[0] {
+		if addr, err := outputAddress(txRawResult1, int(txRawResult0.Vin[0].Vout)); err != nil {
+			return nil, err
+		} else if meme.HolderAddress != addr {
 			return nil, fmt.Errorf("the address is not the same as the previous transaction")
 		}
 	}
 
 	if meme.Op == "transfer" {
-		meme.HolderAddress = txRawResult1.Vout[txRawResult0.Vin[0].Vout].ScriptPubKey.Addresses[0]
-		meme.ToAddress = tx.Vout[0].ScriptPubKey.Addresses[0]
+		meme.HolderAddress, err = outputAddress(txRawResult1, int(txRawResult0.Vin[0].Vout))
+		if err != nil {
+			return nil, err
+		}
+		meme.ToAddress, err = outputAddress(tx, 0)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	meme.FeeAddress = txRawResult0.Vout[tx.Vin[0].Vout].ScriptPubKey.Addresses[0]
+	meme.FeeAddress, err = outputAddress(txRawResult0, int(tx.Vin[0].Vout))
+	if err != nil {
+		return nil, err
+	}
 
 	err = e.dbc.DB.Save(meme).Error
 	if err != nil {
-		return nil, fmt.Errorf("save err: %s", err.Error())
+		return nil, fmt.Errorf("%w: save inscription: %v", STORAGE_ERR, err)
 	}
 
 	return meme, nil

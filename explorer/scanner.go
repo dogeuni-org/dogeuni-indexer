@@ -31,7 +31,14 @@ const (
 
 var (
 	CHAIN_NETWORK_ERR = errors.New("chain network error")
+	STORAGE_ERR       = errors.New("storage error")
 )
+
+// retryable reports whether err came from the node or the database rather than from
+// the inscription itself. Such a tx must not be dropped: the block is scanned again.
+func retryable(err error) bool {
+	return errors.Is(err, CHAIN_NETWORK_ERR) || errors.Is(err, STORAGE_ERR)
+}
 
 type Explorer struct {
 	config        *config.Config
@@ -147,6 +154,9 @@ func (e *Explorer) scan() error {
 			case "drc-20":
 				drc20, err := e.drc20Decode(txv, pushedData, e.currentHeight)
 				if err != nil {
+					if retryable(err) {
+						return fmt.Errorf("scan %s: %w", txv.Txid, err)
+					}
 					log.Error("scanning", "drc20Decode", err, "txhash", txv.Txid)
 					continue
 				}
@@ -161,6 +171,9 @@ func (e *Explorer) scan() error {
 
 				swaps, err := e.swapRouterDecode(txv, e.currentHeight)
 				if err != nil {
+					if retryable(err) {
+						return fmt.Errorf("scan %s: %w", txv.Txid, err)
+					}
 					log.Error("scanning", "swapRouterDecode", err, "txhash", tx)
 					continue
 				}
@@ -174,6 +187,9 @@ func (e *Explorer) scan() error {
 			case "wdoge":
 				wdoge, err := e.wdogeDecode(txv, pushedData, e.currentHeight)
 				if err != nil {
+					if retryable(err) {
+						return fmt.Errorf("scan %s: %w", txv.Txid, err)
+					}
 					log.Error("scanning", "wdogeDecode", err, "txhash", txv.Txid)
 					continue
 				}
@@ -187,6 +203,9 @@ func (e *Explorer) scan() error {
 			case "file":
 				file, err := e.fileDecode(txv, e.currentHeight)
 				if err != nil {
+					if retryable(err) {
+						return fmt.Errorf("scan %s: %w", txv.Txid, err)
+					}
 					log.Error("scanning", "nftDecode", err, "txhash", txv.Txid)
 					continue
 				}
@@ -200,6 +219,9 @@ func (e *Explorer) scan() error {
 			case "stake-v1":
 				stake, err := e.stakeDecode(txv, pushedData, e.currentHeight)
 				if err != nil {
+					if retryable(err) {
+						return fmt.Errorf("scan %s: %w", txv.Txid, err)
+					}
 					log.Error("scanning", "stakeDecode", err, "txhash", txv.Txid)
 					continue
 				}
@@ -213,6 +235,9 @@ func (e *Explorer) scan() error {
 			case "order-v1":
 				ex, err := e.exchangeDecode(txv, pushedData, e.currentHeight)
 				if err != nil {
+					if retryable(err) {
+						return fmt.Errorf("scan %s: %w", txv.Txid, err)
+					}
 					log.Error("scanning", "exchangeDecode", err, "txhash", txv.Txid)
 					continue
 				}
@@ -226,6 +251,9 @@ func (e *Explorer) scan() error {
 			case "order-v2":
 				ex, err := e.fileExchangeDecode(txv, pushedData, e.currentHeight)
 				if err != nil {
+					if retryable(err) {
+						return fmt.Errorf("scan %s: %w", txv.Txid, err)
+					}
 					log.Error("scanning", "fileExchangeDecode", err, "txhash", txv.Txid)
 					continue
 				}
@@ -239,6 +267,9 @@ func (e *Explorer) scan() error {
 			case "box-v1":
 				box, err := e.boxDecode(txv, pushedData, e.currentHeight)
 				if err != nil {
+					if retryable(err) {
+						return fmt.Errorf("scan %s: %w", txv.Txid, err)
+					}
 					log.Error("scanning", "boxDecode", err, "txhash", txv.Txid)
 					continue
 				}
@@ -253,6 +284,9 @@ func (e *Explorer) scan() error {
 
 				cross, err := e.crossDecode(txv, pushedData, e.currentHeight)
 				if err != nil {
+					if retryable(err) {
+						return fmt.Errorf("scan %s: %w", txv.Txid, err)
+					}
 					log.Error("scanning", "crossDecode", err, "txhash", txv.Txid)
 					continue
 				}
@@ -266,6 +300,9 @@ func (e *Explorer) scan() error {
 			case "meme-20":
 				meme20, err := e.meme20Decode(txv, pushedData, e.currentHeight)
 				if err != nil {
+					if retryable(err) {
+						return fmt.Errorf("scan %s: %w", txv.Txid, err)
+					}
 					log.Error("scanning", "meme20Decode", err, "txhash", txv.Txid)
 					continue
 				}
@@ -280,6 +317,9 @@ func (e *Explorer) scan() error {
 
 				swaps, err := e.swapV2RouterDecode(txv, e.currentHeight)
 				if err != nil {
+					if retryable(err) {
+						return fmt.Errorf("scan %s: %w", txv.Txid, err)
+					}
 					log.Error("scanning", "swapV2RouterDecode", err, "txhash", tx)
 					continue
 				}
@@ -293,6 +333,9 @@ func (e *Explorer) scan() error {
 			case "consensus":
 				consensus, err := e.consensusDecode(txv, pushedData, e.currentHeight)
 				if err != nil {
+					if retryable(err) {
+						return fmt.Errorf("scan %s: %w", txv.Txid, err)
+					}
 					log.Error("scanning", "consensusDecode", err, "txhash", txv.Txid)
 					continue
 				}
@@ -307,6 +350,9 @@ func (e *Explorer) scan() error {
 
 				pump, err := e.pumpDecode(txv, pushedData, e.currentHeight)
 				if err != nil {
+					if retryable(err) {
+						return fmt.Errorf("scan %s: %w", txv.Txid, err)
+					}
 					log.Error("scanning", "pumpDecode", err, "txhash", txv.Txid)
 					continue
 				}
@@ -321,6 +367,9 @@ func (e *Explorer) scan() error {
 
 				invite, err := e.inviteDecode(txv, pushedData, e.currentHeight)
 				if err != nil {
+					if retryable(err) {
+						return fmt.Errorf("scan %s: %w", txv.Txid, err)
+					}
 					log.Error("scanning", "inviteDecode", err, "txhash", txv.Txid)
 					continue
 				}
@@ -339,6 +388,9 @@ func (e *Explorer) scan() error {
 
 				stake, err := e.stakeV2Decode(txv, pushedData, e.currentHeight)
 				if err != nil {
+					if retryable(err) {
+						return fmt.Errorf("scan %s: %w", txv.Txid, err)
+					}
 					log.Error("scanning", "stakeV2Decode", err, "txhash", txv.Txid)
 					continue
 				}
@@ -357,6 +409,9 @@ func (e *Explorer) scan() error {
 
 				nft, err := e.nftDecode(txv, e.currentHeight)
 				if err != nil {
+					if retryable(err) {
+						return fmt.Errorf("scan %s: %w", txv.Txid, err)
+					}
 					log.Error("scanning", "nftDecode", err, "txhash", txv.Txid)
 					continue
 				}

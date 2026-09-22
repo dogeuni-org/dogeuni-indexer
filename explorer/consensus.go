@@ -19,8 +19,11 @@ import (
 // consensusDecode parses consensus protocol transactions
 func (e *Explorer) consensusDecode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.ConsensusInfo, error) {
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Txid).First(&models.ConsensusInfo{}).Error
+	if err == nil {
+		return nil, fmt.Errorf("consensus already exist %s", tx.Txid)
+	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, fmt.Errorf("consensus already exist or err %s", tx.Txid)
+		return nil, fmt.Errorf("%w: dedup: %v", STORAGE_ERR, err)
 	}
 
 	param := &models.ConsensusInscription{}
@@ -45,21 +48,26 @@ func (e *Explorer) consensusDecode(tx *btcjson.TxRawResult, pushedData []byte, n
 	consensus.BlockNumber = number
 	consensus.OrderStatus = 1
 
-	consensus.HolderAddress = tx.Vout[0].ScriptPubKey.Addresses[0]
+	consensus.HolderAddress, err = outputAddress(tx, 0)
+	if err != nil {
+		return nil, err
+	}
 
 	txhash0, _ := chainhash.NewHashFromStr(tx.Vin[0].Txid)
 	txRawResult0, err := e.node.GetRawTransactionVerboseBool(txhash0)
 	if err != nil {
-		return nil, CHAIN_NETWORK_ERR
+		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 	}
 
 	txhash1, _ := chainhash.NewHashFromStr(txRawResult0.Vin[0].Txid)
 	txRawResult1, err := e.node.GetRawTransactionVerboseBool(txhash1)
 	if err != nil {
-		return nil, CHAIN_NETWORK_ERR
+		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 	}
 
-	if consensus.HolderAddress != txRawResult1.Vout[txRawResult0.Vin[0].Vout].ScriptPubKey.Addresses[0] {
+	if addr, err := outputAddress(txRawResult1, int(txRawResult0.Vin[0].Vout)); err != nil {
+		return nil, err
+	} else if consensus.HolderAddress != addr {
 		return nil, fmt.Errorf("the address is not the same as the previous transaction")
 	}
 
@@ -75,7 +83,7 @@ func (e *Explorer) consensusDecode(tx *btcjson.TxRawResult, pushedData []byte, n
 
 	err = e.dbc.DB.Save(consensus).Error
 	if err != nil {
-		return nil, fmt.Errorf("SaveConsensus err: %s", err.Error())
+		return nil, fmt.Errorf("%w: save inscription: %v", STORAGE_ERR, err)
 	}
 
 	return consensus, nil

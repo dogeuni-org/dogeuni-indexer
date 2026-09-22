@@ -16,8 +16,11 @@ import (
 func (e *Explorer) crossDecode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.CrossInfo, error) {
 
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Txid).First(&models.CrossInfo{}).Error
+	if err == nil {
+		return nil, fmt.Errorf("cross already exist %s", tx.Txid)
+	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, fmt.Errorf("cross already exist or err %s", tx.Txid)
+		return nil, fmt.Errorf("%w: dedup: %v", STORAGE_ERR, err)
 	}
 
 	param := &models.CrossInscription{}
@@ -37,18 +40,21 @@ func (e *Explorer) crossDecode(tx *btcjson.TxRawResult, pushedData []byte, numbe
 	cross.BlockHash = tx.BlockHash
 	cross.BlockNumber = number
 	cross.OrderStatus = 1
-	cross.HolderAddress = tx.Vout[0].ScriptPubKey.Addresses[0]
+	cross.HolderAddress, err = outputAddress(tx, 0)
+	if err != nil {
+		return nil, err
+	}
 
 	txhash0, _ := chainhash.NewHashFromStr(tx.Vin[0].Txid)
 	txRawResult0, err := e.node.GetRawTransactionVerboseBool(txhash0)
 	if err != nil {
-		return nil, CHAIN_NETWORK_ERR
+		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 	}
 
 	txhash1, _ := chainhash.NewHashFromStr(txRawResult0.Vin[0].Txid)
 	txRawResult1, err := e.node.GetRawTransactionVerboseBool(txhash1)
 	if err != nil {
-		return nil, CHAIN_NETWORK_ERR
+		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 	}
 
 	if cross.Op == "mint" {
@@ -56,13 +62,18 @@ func (e *Explorer) crossDecode(tx *btcjson.TxRawResult, pushedData []byte, numbe
 		txhash1, _ := chainhash.NewHashFromStr(txRawResult0.Vin[0].Txid)
 		txRawResult1, err := e.node.GetRawTransactionVerboseBool(txhash1)
 		if err != nil {
-			return nil, fmt.Errorf("GetRawTransactionVerboseBool err: %s", err.Error())
+			return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 		}
 
-		cross.HolderAddress = txRawResult1.Vout[txRawResult0.Vin[0].Vout].ScriptPubKey.Addresses[0]
+		cross.HolderAddress, err = outputAddress(txRawResult1, int(txRawResult0.Vin[0].Vout))
+		if err != nil {
+			return nil, err
+		}
 
 	} else {
-		if cross.HolderAddress != txRawResult1.Vout[txRawResult0.Vin[0].Vout].ScriptPubKey.Addresses[0] {
+		if addr, err := outputAddress(txRawResult1, int(txRawResult0.Vin[0].Vout)); err != nil {
+			return nil, err
+		} else if cross.HolderAddress != addr {
 			return nil, fmt.Errorf("the address is not the same as the previous transaction")
 		}
 
@@ -70,7 +81,7 @@ func (e *Explorer) crossDecode(tx *btcjson.TxRawResult, pushedData []byte, numbe
 
 	err = e.dbc.DB.Create(cross).Error
 	if err != nil {
-		return nil, fmt.Errorf("err: %s", err.Error())
+		return nil, fmt.Errorf("%w: save inscription: %v", STORAGE_ERR, err)
 	}
 
 	return cross, nil

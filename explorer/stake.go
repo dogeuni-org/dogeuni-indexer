@@ -19,8 +19,11 @@ import (
 func (e *Explorer) stakeDecode(tx *btcjson.TxRawResult, pushedData []byte, number int64) (*models.StakeInfo, error) {
 
 	err := e.dbc.DB.Where("tx_hash = ?", tx.Txid).First(&models.StakeInfo{}).Error
+	if err == nil {
+		return nil, fmt.Errorf("stake already exist %s", tx.Txid)
+	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, fmt.Errorf("stake already exist or err %s", tx.Txid)
+		return nil, fmt.Errorf("%w: dedup: %v", STORAGE_ERR, err)
 	}
 
 	param := &models.StakeInscription{}
@@ -45,27 +48,32 @@ func (e *Explorer) stakeDecode(tx *btcjson.TxRawResult, pushedData []byte, numbe
 	stake.BlockNumber = number
 	stake.OrderStatus = 1
 
-	stake.HolderAddress = tx.Vout[0].ScriptPubKey.Addresses[0]
+	stake.HolderAddress, err = outputAddress(tx, 0)
+	if err != nil {
+		return nil, err
+	}
 
 	txhash0, _ := chainhash.NewHashFromStr(tx.Vin[0].Txid)
 	txRawResult0, err := e.node.GetRawTransactionVerboseBool(txhash0)
 	if err != nil {
-		return nil, CHAIN_NETWORK_ERR
+		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 	}
 
 	txhash1, _ := chainhash.NewHashFromStr(txRawResult0.Vin[0].Txid)
 	txRawResult1, err := e.node.GetRawTransactionVerboseBool(txhash1)
 	if err != nil {
-		return nil, CHAIN_NETWORK_ERR
+		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 	}
 
-	if stake.HolderAddress != txRawResult1.Vout[txRawResult0.Vin[0].Vout].ScriptPubKey.Addresses[0] {
+	if addr, err := outputAddress(txRawResult1, int(txRawResult0.Vin[0].Vout)); err != nil {
+		return nil, err
+	} else if stake.HolderAddress != addr {
 		return nil, fmt.Errorf("The address is not the same as the previous transaction")
 	}
 
 	err = e.dbc.DB.Save(stake).Error
 	if err != nil {
-		return nil, fmt.Errorf("SaveStake err: %s", err.Error())
+		return nil, fmt.Errorf("%w: save inscription: %v", STORAGE_ERR, err)
 	}
 
 	return stake, nil

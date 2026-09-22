@@ -73,7 +73,14 @@ func (e *Explorer) forkBack() error {
 
 func (e *Explorer) fork(tx *gorm.DB, height int64) error {
 
-	err := e.delInfo(tx, height)
+	// drc-20 deploys write no revert row, so capture them before delInfo drops drc20_info
+	var drc20Deploys []string
+	err := tx.Model(&models.Drc20Info{}).Where("op = ? AND block_number > ?", "deploy", height).Pluck("tx_hash", &drc20Deploys).Error
+	if err != nil {
+		return fmt.Errorf("FindDrc20Deploy error: %v", err)
+	}
+
+	err = e.delInfo(tx, height)
 	if err != nil {
 		return err
 	}
@@ -153,6 +160,12 @@ func (e *Explorer) fork(tx *gorm.DB, height int64) error {
     if err != nil {
         return err
     }
+
+	// after every balance revert has run, so the ticks no longer hold anything
+	err = e.drc20DeployFork(tx, drc20Deploys)
+	if err != nil {
+		return err
+	}
 
 	err = e.delRevert(tx, height)
 	if err != nil {
