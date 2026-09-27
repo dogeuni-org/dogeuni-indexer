@@ -2,7 +2,9 @@ package router_v3
 
 import (
 	"dogeuni-indexer/utils"
+	"errors"
 	"github.com/gin-gonic/gin"
+	"io"
 	"math/big"
 	"net/http"
 	"strings"
@@ -418,8 +420,25 @@ func (r *Router) SwapPairByTick(c *gin.Context) {
 }
 
 func (r *Router) SwapPairAll(c *gin.Context) {
+	// Callers that send no limit, or no body at all, get every pair as before.
+	p := &struct {
+		Limit  *int64 `json:"limit"`
+		OffSet int64  `json:"offset"`
+	}{}
+	if err := c.ShouldBindJSON(p); err != nil && !errors.Is(err, io.EOF) {
+		result := &utils.HttpResult{}
+		result.Code = 500
+		result.Msg = err.Error()
+		c.JSON(http.StatusBadRequest, result)
+		return
+	}
+	var limit int64
+	if p.Limit != nil {
+		limit = utils.PageLimit(*p.Limit, 50)
+	}
+	offset := utils.PageOffset(p.OffSet)
 
-	summary, err := r.mysql.FindSwapPairAll()
+	summary, total, err := r.mysql.FindSwapPairAll(limit, offset, p.Limit == nil)
 	if err != nil {
 		result := &utils.HttpResult{}
 		result.Code = 500
@@ -432,6 +451,7 @@ func (r *Router) SwapPairAll(c *gin.Context) {
 	result.Code = 200
 	result.Msg = "success"
 	result.Data = summary
+	result.Total = total
 
 	c.JSON(http.StatusOK, result)
 }
