@@ -763,8 +763,9 @@ ORDER BY es.liquidity DESC;
 	return results, nil
 }
 
-func (c *MysqlClient) FindSwapPairAll() ([]*utils.SwapPairSummary, error) {
-	query := `
+// swapPairAllQuery yields one row per pair: its latest liquidity summary joined with
+// its current reserves.
+const swapPairAllQuery = `
 SELECT
     es.tick,
     es.tick0,
@@ -786,14 +787,34 @@ INNER JOIN (
     GROUP BY
         tick
 ) es_max ON es.id = es_max.max_id
-LEFT JOIN swap_liquidity sl ON es.tick = sl.tick
-ORDER BY es.liquidity DESC;
-`
-	rows, err := c.MysqlDB.Query(query)
+LEFT JOIN swap_liquidity sl ON es.tick = sl.tick`
+
+// FindSwapPairAll returns the pairs by liquidity, highest first, and the number of
+// pairs. With all set it returns every pair and ignores limit and offset. Ties are
+// broken by id so that pages neither repeat nor skip rows.
+func (c *MysqlClient) FindSwapPairAll(limit, offset int64, all bool) ([]*utils.SwapPairSummary, int64, error) {
+	// One read transaction, so the total and the page come from the same snapshot.
+	tx, err := c.MysqlDB.Begin()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
+	}
+	defer tx.Rollback()
+
+	var total int64
+	if err := tx.QueryRow("SELECT COUNT(*) FROM (" + swapPairAllQuery + ") pairs").Scan(&total); err != nil {
+		return nil, 0, err
 	}
 
+	query := swapPairAllQuery + "\nORDER BY es.liquidity DESC, es.id, sl.id"
+	var args []interface{}
+	if !all {
+		query += "\nLIMIT ? OFFSET ?"
+		args = append(args, limit, offset)
+	}
+	rows, err := tx.Query(query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
 	defer rows.Close()
 
 	results := make([]*utils.SwapPairSummary, 0)
@@ -802,17 +823,20 @@ ORDER BY es.liquidity DESC;
 		result := &utils.SwapPairSummary{}
 		err := rows.Scan(&result.Tick, &result.Tick0, &result.Tick1, &result.PriceChangePercent24H, &Liquidity, &result.BaseVolume, &result.DogeUsdt, &result.Amt0, &result.Amt1)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		f1, err := strconv.ParseFloat(Liquidity, 64)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		result.Liquidity = f1
 		results = append(results, result)
 
 	}
-	return results, nil
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return results, total, nil
 }
