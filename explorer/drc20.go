@@ -182,16 +182,29 @@ func (e *Explorer) drc20Mint(drc20 *models.Drc20Info) error {
 	return nil
 }
 
+// transferRecipients lists the holders a transfer credits with its amt. verifyTransfer already
+// charges amt per recipient. Below multiTransferHeight the joined list is credited as a single
+// holder named "A,B", which no key can spend; those balances stay as they are so that a rescan
+// reproduces the ledger.
+func (e *Explorer) transferRecipients(drc20 *models.Drc20Info) []string {
+	if activated(e.multiTransferHeight, drc20.BlockNumber) {
+		return strings.Split(drc20.ToAddress, ",")
+	}
+	return []string{drc20.ToAddress}
+}
+
 func (e *Explorer) drc20Transfer(drc20 *models.Drc20Info) error {
 
 	tx := e.dbc.DB.Begin()
-	err := e.dbc.TransferDrc20(tx, drc20.Tick, drc20.HolderAddress, drc20.ToAddress, drc20.Amt.Int(), drc20.TxHash, drc20.BlockNumber, false)
-	if err != nil {
-		tx.Rollback()
-		return err
+	for _, to := range e.transferRecipients(drc20) {
+		err := e.dbc.TransferDrc20(tx, drc20.Tick, drc20.HolderAddress, to, drc20.Amt.Int(), drc20.TxHash, drc20.BlockNumber, false)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
 	}
 
-	err = tx.Model(&models.Drc20Info{}).Where("tx_hash = ?", drc20.TxHash).Update("order_status", 0).Error
+	err := tx.Model(&models.Drc20Info{}).Where("tx_hash = ?", drc20.TxHash).Update("order_status", 0).Error
 	if err != nil {
 		tx.Rollback()
 		return fmt.Errorf("update err: %s", err.Error())
