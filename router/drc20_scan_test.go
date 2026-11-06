@@ -38,7 +38,8 @@ func seedTransfer(t *testing.T, dbc *storage.DBClient, hash, to string, height, 
 	if err := dbc.DB.Create(info).Error; err != nil {
 		t.Fatal(err)
 	}
-	key := &models.Drc20TransferKey{TxHash: hash, BlockNumber: height, SenderPubkey: "key-" + hash}
+	key := &models.Drc20TransferKey{TxHash: hash, BlockNumber: height, SenderPubkey: "key-" + hash,
+		SenderTxid: "prev-" + hash, SenderVout: 3}
 	if err := dbc.DB.Create(key).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -57,6 +58,9 @@ func TestTransferScan(t *testing.T) {
 	}
 	if rows[0]["tx_hash"] != "a" || rows[0]["sender_pubkey"] != "key-a" || rows[0]["tick"] != "TICK" {
 		t.Fatalf("row %v", rows[0])
+	}
+	if rows[0]["sender_txid"] != "prev-a" || rows[0]["sender_vout"] != float64(3) {
+		t.Fatalf("outpoint %v", rows[0])
 	}
 	if to := rows[1]["to_addresses"].([]interface{}); len(to) != 2 || to[1] != "C" {
 		t.Fatalf("to_addresses %v", to)

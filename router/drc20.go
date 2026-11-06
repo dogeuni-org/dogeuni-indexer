@@ -360,6 +360,8 @@ type drc20TransferScanRow struct {
 	TxHash       string         `json:"tx_hash"`
 	BlockNumber  int64          `json:"block_number"`
 	SenderPubkey string         `json:"sender_pubkey"`
+	SenderTxid   string         `json:"sender_txid"`
+	SenderVout   uint32         `json:"sender_vout"`
 	Tick         string         `json:"tick"`
 	Amt          *models.Number `json:"amt"`
 	ToAddress    string         `json:"-"`
@@ -389,7 +391,7 @@ func (r *Drc20Router) TransferScan(c *gin.Context) {
 
 	rows := make([]*drc20TransferScanRow, 0)
 	err := r.dbc.DB.Table("drc20_transfer_key AS k").
-		Select("k.id, k.tx_hash, k.block_number, k.sender_pubkey, d.tick, d.amt, d.to_address").
+		Select("k.id, k.tx_hash, k.block_number, k.sender_pubkey, k.sender_txid, k.sender_vout, d.tick, d.amt, d.to_address").
 		Joins("JOIN drc20_info AS d ON d.tx_hash = k.tx_hash").
 		Where("k.id > ? AND k.block_number >= ? AND d.order_status = 0", params.AfterId, params.FromBlock).
 		Order("k.id").Limit(params.Limit).Scan(&rows).Error

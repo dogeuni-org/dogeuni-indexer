@@ -39,7 +39,7 @@ func TestP2pkhPubkey(t *testing.T) {
 
 func TestSaveTransferKey(t *testing.T) {
 	e := newTestExplorer(t, &models.BoxCollectAddress{}, &models.BoxInfo{}, &models.CrossInfo{}, &models.Drc20Info{}, &models.Drc20TransferKey{}, &models.ExchangeInfo{}, &models.FileExchangeInfo{}, &models.FileInfo{}, &models.InviteInfo{}, &models.Meme20Info{}, &models.NftInfo{}, &models.PumpInfo{}, &models.StakeInfo{}, &models.StakeRewardInfo{}, &models.StakeV2Info{}, &models.SwapInfo{}, &models.SwapV2Info{}, &models.WDogeInfo{})
-	in := &btcjson.Vin{ScriptSig: &btcjson.ScriptSig{Hex: "01ab21" + testPubkey}}
+	in := &btcjson.Vin{Txid: "prev", Vout: 3, ScriptSig: &btcjson.ScriptSig{Hex: "01ab21" + testPubkey}}
 	card := &models.Drc20Info{TxHash: "t1", BlockNumber: 100}
 
 	// the second pass is a pending row decoded again after a restart
@@ -56,7 +56,7 @@ func TestSaveTransferKey(t *testing.T) {
 	if err := e.dbc.DB.Find(&keys).Error; err != nil {
 		t.Fatal(err)
 	}
-	if len(keys) != 1 || keys[0].SenderPubkey != testPubkey {
+	if len(keys) != 1 || keys[0].SenderPubkey != testPubkey || keys[0].SenderTxid != "prev" || keys[0].SenderVout != 3 {
 		t.Fatalf("keys %+v", keys)
 	}
 

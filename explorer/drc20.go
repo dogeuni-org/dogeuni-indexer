@@ -147,6 +147,8 @@ func (e *Explorer) saveTransferKey(card *models.Drc20Info, in *btcjson.Vin) erro
 		TxHash:       card.TxHash,
 		BlockNumber:  card.BlockNumber,
 		SenderPubkey: key,
+		SenderTxid:   in.Txid,
+		SenderVout:   in.Vout,
 	}).Error
 }
 

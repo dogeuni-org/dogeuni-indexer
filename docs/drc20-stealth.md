@@ -5,8 +5,9 @@
 ## 钱包派生约定
 
 - 发送方公钥 `A`：签名 commit 交易 `Vin[0]` 的公钥，也就是 token 持有地址的公钥。
-- 收款方公布 `B_scan`、`B_spend`。一次性地址由 `A` 和 `B_scan` 的 ECDH 结果派生。
-- 具体派生算法由钱包定义，索引器只提供 `A`。
+- outpoint：commit 交易 `Vin[0]` 花费的 `txid:vout`。
+- 收款方公布 `B_scan`、`B_spend`。一次性地址由 `A` 和 `B_scan` 的 ECDH 结果派生，并混入 outpoint。不混入的话，同一个 `A` 给同一收款方转两次会得到同一个地址。
+- 具体派生算法由钱包定义，索引器只提供 `A` 和 outpoint。
 
 ## 接口
 
@@ -16,7 +17,7 @@
 
 请求：`{"after_id": 0, "from_block": 0, "limit": 100}`，`limit` 上限 1000。
 
-返回 `data` 每行：`id`、`tx_hash`、`block_number`、`sender_pubkey`、`tick`、`amt`、`to_addresses`。下一页把最后一行的 `id` 作为 `after_id`。
+返回 `data` 每行：`id`、`tx_hash`、`block_number`、`sender_pubkey`、`sender_txid`、`sender_vout`、`tick`、`amt`、`to_addresses`。下一页把最后一行的 `id` 作为 `after_id`。
 
 ### `POST /v4/drc20/balances`
 
@@ -28,6 +29,7 @@
 
 ## 约束
 
+- **收款方数量：** 多收款方时每个地址记同样的 `amt`，无法表达“付 30、留 70”，钱包按整笔转出设计。
 - **只覆盖部署之后：** `drc20_transfer_key` 不回填历史，从部署后的区块开始才有数据。
 - **只支持压缩公钥 P2PKH：** commit `Vin[0]` 不是这种输入时不记录，这笔 transfer 不会出现在 scan 里，但记账不受影响。
 - **reorg：** 被回滚的记录会删除，重新打包后拿到新 `id`。钱包已读过的记录可能失效，余额以 `/v4/drc20/balances` 为准，并等足够确认。
