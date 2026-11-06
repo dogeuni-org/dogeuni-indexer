@@ -185,6 +185,11 @@ func (e *Explorer) delInfo(tx *gorm.DB, height int64) error {
 		return fmt.Errorf("DeleteDrc20Info error: %v", err)
 	}
 
+	err = tx.Where("block_number > ?", height).Delete(&models.Drc20TransferKey{}).Error
+	if err != nil {
+		return fmt.Errorf("DeleteDrc20TransferKey error: %v", err)
+	}
+
 	err = tx.Where("block_number > ?", height).Delete(&models.SwapInfo{}).Error
 	if err != nil {
 		return fmt.Errorf("DeleteDrc20Collect error: %v", err)

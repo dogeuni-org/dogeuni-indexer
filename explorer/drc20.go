@@ -3,14 +3,18 @@ package explorer
 import (
 	"dogeuni-indexer/models"
 	"dogeuni-indexer/utils"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/dogecoinw/doged/btcec"
 	"github.com/dogecoinw/doged/btcjson"
 	"github.com/dogecoinw/doged/chaincfg/chainhash"
+	"github.com/dogecoinw/doged/txscript"
 	"github.com/dogecoinw/go-dogecoin/log"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"math/big"
 	"strings"
 )
@@ -122,7 +126,51 @@ func (e *Explorer) drc20Decode(tx *btcjson.TxRawResult, pushedData []byte, numbe
 		return nil, fmt.Errorf("%w: save inscription: %v", STORAGE_ERR, err)
 	}
 
+	if card.Op == "transfer" {
+		if err := e.saveTransferKey(card, &txRawResult0.Vin[0]); err != nil {
+			return nil, fmt.Errorf("%w: save transfer key: %v", STORAGE_ERR, err)
+		}
+	}
+
 	return card, nil
+}
+
+// saveTransferKey records who signed the input the transfer spends from. An input without a
+// compressed P2PKH key has nothing to record; the transfer itself is unaffected.
+func (e *Explorer) saveTransferKey(card *models.Drc20Info, in *btcjson.Vin) error {
+	key := p2pkhPubkey(in)
+	if key == "" {
+		return nil
+	}
+	// a pending row is decoded again after a restart
+	return e.dbc.DB.Clauses(clause.OnConflict{DoNothing: true}).Create(&models.Drc20TransferKey{
+		TxHash:       card.TxHash,
+		BlockNumber:  card.BlockNumber,
+		SenderPubkey: key,
+	}).Error
+}
+
+// p2pkhPubkey returns the compressed public key in a P2PKH scriptSig (<sig> <pubkey>), or "".
+func p2pkhPubkey(in *btcjson.Vin) string {
+	if in.ScriptSig == nil {
+		return ""
+	}
+	script, err := hex.DecodeString(in.ScriptSig.Hex)
+	if err != nil || len(script) == 0 {
+		return ""
+	}
+	sigLen := int(script[0])
+	if sigLen == 0 || sigLen > txscript.OP_DATA_75 || len(script) != 1+sigLen+1+btcec.PubKeyBytesLenCompressed {
+		return ""
+	}
+	if int(script[1+sigLen]) != btcec.PubKeyBytesLenCompressed {
+		return ""
+	}
+	key := script[2+sigLen:]
+	if _, err := btcec.ParsePubKey(key); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(key)
 }
 
 func (e *Explorer) drc20Deploy(drc20 *models.Drc20Info) error {

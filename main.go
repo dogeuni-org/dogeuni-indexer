@@ -171,6 +171,8 @@ func main() {
 			v4.POST("/drc20/collect", drc20Router.Collect)
 			v4.POST("/drc20/collect-address", drc20Router.CollectAddress)
 			v4.POST("/drc20/history", drc20Router.History)
+			v4.POST("/drc20/transfer-scan", drc20Router.TransferScan)
+			v4.POST("/drc20/balances", drc20Router.Balances)
 
 			swapRouter := router.NewSwapRouter(dbClient, rpcClient)
 			v4.POST("/swap/order", swapRouter.Order)
