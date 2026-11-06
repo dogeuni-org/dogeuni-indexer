@@ -67,6 +67,8 @@ type Explorer struct {
 	stakeV2Height int64
 	nftHeight     int64
 	amountHeight  int64
+	// first block where a drc-20 transfer credits each recipient, see transferRecipients
+	multiTransferHeight int64
 
 	ctx context.Context
 	wg  *sync.WaitGroup
@@ -86,6 +88,7 @@ func NewExplorer(ctx context.Context, wg *sync.WaitGroup, rpcClient *rpcclient.C
 		stakeV2Height: cfg.StakeV2Height,
 		nftHeight:     cfg.NftHeight,
 		amountHeight:  cfg.AmountHeight,
+		multiTransferHeight: cfg.MultiTransferHeight,
 		ctx:           ctx,
 		wg:            wg,
 	}

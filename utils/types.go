@@ -49,6 +49,9 @@ type ExplorerConfig struct {
 	// From AmountHeight on, DOGE output values are compared in exact satoshis instead
 	// of float64; 0 keeps the legacy comparison
 	AmountHeight int64 `json:"amount_height"`
+	// From MultiTransferHeight on, a drc-20 transfer to several outputs credits each of them;
+	// below it the joined address list is credited as one holder. 0 keeps the legacy behaviour
+	MultiTransferHeight int64 `json:"multi_transfer_height"`
 }
 
 type HttpResult struct {
