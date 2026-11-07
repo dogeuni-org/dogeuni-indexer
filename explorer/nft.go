@@ -105,13 +105,7 @@ func (e *Explorer) nftDecode(tx *btcjson.TxRawResult, number int64) (*models.Nft
 
 	if nft.Op == "transfer" {
 
-		txhash1, _ := chainhash.NewHashFromStr(txRawResult0.Vin[0].Txid)
-		txRawResult1, err := e.node.GetRawTransactionVerboseBool(txhash1)
-		if err != nil {
-			return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
-		}
-
-		nft.HolderAddress, err = outputAddress(txRawResult1, int(txRawResult0.Vin[0].Vout))
+		nft.HolderAddress, err = e.commitSender(txRawResult0, number)
 		if err != nil {
 			return nil, err
 		}

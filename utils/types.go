@@ -49,6 +49,9 @@ type ExplorerConfig struct {
 	// From AmountHeight on, DOGE output values are compared in exact satoshis instead
 	// of float64; 0 keeps the legacy comparison
 	AmountHeight int64 `json:"amount_height"`
+	// From ReserveSenderHeight on, an inscription whose sender is a protocol reserve
+	// address is invalid; 0 keeps the legacy behaviour
+	ReserveSenderHeight int64 `json:"reserve_sender_height"`
 }
 
 type HttpResult struct {

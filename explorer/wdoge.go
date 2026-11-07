@@ -94,13 +94,7 @@ func (e *Explorer) wdogeDecode(tx *btcjson.TxRawResult, pushedData []byte, numbe
 		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
 	}
 
-	txhash1, _ := chainhash.NewHashFromStr(txRawResult0.Vin[0].Txid)
-	txRawResult1, err := e.node.GetRawTransactionVerboseBool(txhash1)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
-	}
-
-	if addr, err := outputAddress(txRawResult1, int(txRawResult0.Vin[0].Vout)); err != nil {
+	if addr, err := e.commitSender(txRawResult0, number); err != nil {
 		return nil, err
 	} else if wdoge.HolderAddress != addr {
 		return nil, fmt.Errorf("the address is not the same as the previous transaction")

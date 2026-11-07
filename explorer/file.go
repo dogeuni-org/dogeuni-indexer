@@ -67,13 +67,7 @@ func (e *Explorer) fileDecode(tx *btcjson.TxRawResult, number int64) (*models.Fi
 
 	if file.Op == "transfer" {
 
-		txhash1, _ := chainhash.NewHashFromStr(txRawResult0.Vin[0].Txid)
-		txRawResult1, err := e.node.GetRawTransactionVerboseBool(txhash1)
-		if err != nil {
-			return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
-		}
-
-		file.HolderAddress, err = outputAddress(txRawResult1, int(txRawResult0.Vin[0].Vout))
+		file.HolderAddress, err = e.commitSender(txRawResult0, number)
 		if err != nil {
 			return nil, err
 		}
