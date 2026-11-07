@@ -9,6 +9,7 @@ import (
 	"github.com/dogecoinw/go-dogecoin/log"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"math"
 	"math/big"
 )
 
@@ -16,6 +17,12 @@ const (
 	FinishFeeAddress = "DJ9wVHBFnbcZUtfWdHWPEnijdxz1CABPUY"
 	TxFeeAddress     = "D7NfMMzqWB9FaUssLwgCs14Q5F6CCfpf9A"
 )
+
+// PumpMinOutHeight is the first block at which a pump trade fails when it would pay out less than its
+// amt1_min. Trades below it executed without that check, and some clients sent a non-zero amt1_min, so
+// enforcing it from genesis would change history on a rescan. It stays disabled (math.MaxInt64) until
+// it is set to a height above the tip at deploy time; every indexer must switch at the same height.
+var PumpMinOutHeight int64 = math.MaxInt64
 
 var (
 	MemeMax             = models.NewNumber(100000000000000000)
@@ -273,6 +280,11 @@ func (db *DBClient) PumpTrade(tx *gorm.DB, pump *models.PumpInfo) error {
 				return err
 			}
 		}
+	}
+
+	// amtout is what the holder receives, after the fee; the caller rolls the whole trade back on error.
+	if pump.BlockNumber >= PumpMinOutHeight && pump.Amt1Min != nil && amtout.Cmp(pump.Amt1Min.Int()) < 0 {
+		return fmt.Errorf("the minimum output less than the limit. output %s, minimum %s", amtout.String(), pump.Amt1Min.Int().String())
 	}
 
 	if len(pump.Tick1Id) < MEMETICKID_LENGTH {
