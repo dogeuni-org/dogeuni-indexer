@@ -52,6 +52,8 @@ type ExplorerConfig struct {
 	// From ReserveSenderHeight on, an inscription whose sender is a protocol reserve
 	// address is invalid; 0 keeps the legacy behaviour
 	ReserveSenderHeight int64 `json:"reserve_sender_height"`
+	// From PrizeV1Height on, prize-v1 inscriptions are indexed; 0 keeps it disabled
+	PrizeV1Height int64 `json:"prize_v1_height"`
 }
 
 type HttpResult struct {

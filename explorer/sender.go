@@ -23,6 +23,7 @@ var reserveModels = []interface{}{
 	&models.ExchangeCollect{},
 	&models.FileExchangeCollect{},
 	&models.ConsensusStakeRecord{},
+	&models.PrizePool{},
 }
 
 // commitSender returns the address that authorises an inscription: the owner of the
