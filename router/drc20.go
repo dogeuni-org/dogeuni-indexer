@@ -8,7 +8,11 @@ import (
 	"github.com/gin-gonic/gin"
 	shell "github.com/ipfs/go-ipfs-api"
 	"net/http"
+	"strings"
 )
+
+// MaxBalanceAddresses bounds one /v4/drc20/balances request.
+const MaxBalanceAddresses = 100
 
 var (
 	cacheDrc20CollectAll *models.Drc20CollectCache
@@ -347,6 +351,126 @@ func (r *Drc20Router) Collect(c *gin.Context) {
 	result.Msg = "success"
 	result.Data = results
 	result.Total = total
+
+	c.JSON(http.StatusOK, result)
+}
+
+type drc20TransferScanRow struct {
+	ID           uint           `json:"id"`
+	TxHash       string         `json:"tx_hash"`
+	BlockNumber  int64          `json:"block_number"`
+	SenderPubkey string         `json:"sender_pubkey"`
+	SenderTxid   string         `json:"sender_txid"`
+	SenderVout   uint32         `json:"sender_vout"`
+	Tick         string         `json:"tick"`
+	Amt          *models.Number `json:"amt"`
+	ToAddress    string         `json:"-"`
+	ToAddresses  []string       `gorm:"-" json:"to_addresses"`
+}
+
+// TransferScan streams executed transfers in the order they were indexed, for wallets that must
+// test every transfer because they cannot know their one-time addresses in advance. Pass the id of
+// the last row as after_id to continue.
+func (r *Drc20Router) TransferScan(c *gin.Context) {
+	params := &struct {
+		AfterId   int64 `json:"after_id"`
+		FromBlock int64 `json:"from_block"`
+		Limit     int   `json:"limit"`
+	}{
+		Limit: utils.MaxPageLimit,
+	}
+
+	if err := c.ShouldBindJSON(&params); err != nil {
+		result := &utils.HttpResult{}
+		result.Code = 400
+		result.Msg = err.Error()
+		c.JSON(http.StatusBadRequest, result)
+		return
+	}
+	params.Limit = utils.PageLimit(params.Limit, utils.MaxSeriesLimit)
+
+	rows := make([]*drc20TransferScanRow, 0)
+	err := r.dbc.DB.Table("drc20_transfer_key AS k").
+		Select("k.id, k.tx_hash, k.block_number, k.sender_pubkey, k.sender_txid, k.sender_vout, d.tick, d.amt, d.to_address").
+		Joins("JOIN drc20_info AS d ON d.tx_hash = k.tx_hash").
+		Where("k.id > ? AND k.block_number >= ? AND d.order_status = 0", params.AfterId, params.FromBlock).
+		Order("k.id").Limit(params.Limit).Scan(&rows).Error
+	if err != nil {
+		result := &utils.HttpResult{}
+		result.Code = 500
+		result.Msg = "server error"
+		c.JSON(http.StatusInternalServerError, result)
+		return
+	}
+	for _, row := range rows {
+		row.ToAddresses = strings.Split(row.ToAddress, ",")
+	}
+
+	result := &utils.HttpResult{}
+	result.Code = 200
+	result.Msg = "success"
+	result.Data = rows
+	result.Total = int64(len(rows))
+
+	c.JSON(http.StatusOK, result)
+}
+
+type drc20BalanceRow struct {
+	Tick          string         `json:"tick"`
+	HolderAddress string         `json:"holder_address"`
+	Amt           *models.Number `gorm:"column:amt_sum" json:"amt"`
+}
+
+// Balances returns the non-zero balances of a set of addresses. The server sees the set together,
+// so a wallet that keeps its addresses unlinked must ask its own indexer.
+func (r *Drc20Router) Balances(c *gin.Context) {
+	params := &struct {
+		Addresses []string `json:"addresses"`
+		Tick      string   `json:"tick"`
+	}{}
+
+	if err := c.ShouldBindJSON(&params); err != nil {
+		result := &utils.HttpResult{}
+		result.Code = 400
+		result.Msg = err.Error()
+		c.JSON(http.StatusBadRequest, result)
+		return
+	}
+	if len(params.Addresses) == 0 || len(params.Addresses) > MaxBalanceAddresses {
+		result := &utils.HttpResult{}
+		result.Code = 400
+		result.Msg = "addresses must hold 1 to 100 entries"
+		c.JSON(http.StatusBadRequest, result)
+		return
+	}
+
+	query := r.dbc.DB.Table("drc20_collect_address").Select("tick, holder_address, amt_sum").
+		Where("holder_address IN ?", params.Addresses)
+	if params.Tick != "" {
+		query = query.Where("tick = ?", params.Tick)
+	}
+
+	found := make([]*drc20BalanceRow, 0)
+	if err := query.Order("holder_address, tick").Scan(&found).Error; err != nil {
+		result := &utils.HttpResult{}
+		result.Code = 500
+		result.Msg = "server error"
+		c.JSON(http.StatusInternalServerError, result)
+		return
+	}
+
+	rows := make([]*drc20BalanceRow, 0, len(found))
+	for _, row := range found {
+		if row.Amt != nil && row.Amt.Int().Sign() > 0 {
+			rows = append(rows, row)
+		}
+	}
+
+	result := &utils.HttpResult{}
+	result.Code = 200
+	result.Msg = "success"
+	result.Data = rows
+	result.Total = int64(len(rows))
 
 	c.JSON(http.StatusOK, result)
 }

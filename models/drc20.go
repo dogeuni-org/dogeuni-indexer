@@ -98,6 +98,22 @@ func (Drc20Revert) TableName() string {
 	return "drc20_revert"
 }
 
+// Drc20TransferKey is the public key that signed the input a transfer spends from, and that input's
+// outpoint. A wallet needs both to recognise one-time addresses paid to it: the outpoint keeps two
+// payments from one key to one recipient on different addresses. It plays no part in the ledger.
+type Drc20TransferKey struct {
+	ID           uint   `gorm:"primarykey" json:"id"`
+	TxHash       string `gorm:"size:64;uniqueIndex" json:"tx_hash"`
+	BlockNumber  int64  `gorm:"index" json:"block_number"`
+	SenderPubkey string `gorm:"size:66" json:"sender_pubkey"`
+	SenderTxid   string `gorm:"size:64" json:"sender_txid"`
+	SenderVout   uint32 `json:"sender_vout"`
+}
+
+func (Drc20TransferKey) TableName() string {
+	return "drc20_transfer_key"
+}
+
 type Drc20CollectAll struct {
 	Tick         string   `json:"tick"`
 	MintAmt      *big.Int `json:"mint_amt"`
