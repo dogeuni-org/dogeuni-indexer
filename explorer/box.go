@@ -67,13 +67,7 @@ func (e *Explorer) boxDecode(tx *btcjson.TxRawResult, pushedData []byte, number 
 		return nil, err
 	}
 
-	txHashIn1, _ := chainhash.NewHashFromStr(txRawResult0.Vin[0].Txid)
-	txRawResult1, err := e.node.GetRawTransactionVerboseBool(txHashIn1)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
-	}
-
-	if addr, err := outputAddress(txRawResult1, int(txRawResult0.Vin[0].Vout)); err != nil {
+	if addr, err := e.commitSender(txRawResult0, number); err != nil {
 		return nil, err
 	} else if box.HolderAddress != addr {
 		return nil, fmt.Errorf("the address is not the same as the previous transaction")

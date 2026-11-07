@@ -67,6 +67,8 @@ type Explorer struct {
 	stakeV2Height int64
 	nftHeight     int64
 	amountHeight  int64
+	// reserveSenderHeight gates commitSender's reserve check
+	reserveSenderHeight int64
 
 	ctx context.Context
 	wg  *sync.WaitGroup
@@ -77,17 +79,18 @@ func NewExplorer(ctx context.Context, wg *sync.WaitGroup, rpcClient *rpcclient.C
 	// for its statements only, not for the API's.
 	dbc, fault := dbc.WithFaultRecorder()
 	exp := &Explorer{
-		node:          rpcClient,
-		dbc:           dbc,
-		ipfs:          ipfs,
-		verify:        NewVerifys(dbc),
-		fault:         fault,
-		currentHeight: cfg.FromBlock,
-		stakeV2Height: cfg.StakeV2Height,
-		nftHeight:     cfg.NftHeight,
-		amountHeight:  cfg.AmountHeight,
-		ctx:           ctx,
-		wg:            wg,
+		node:                rpcClient,
+		dbc:                 dbc,
+		ipfs:                ipfs,
+		verify:              NewVerifys(dbc),
+		fault:               fault,
+		currentHeight:       cfg.FromBlock,
+		stakeV2Height:       cfg.StakeV2Height,
+		nftHeight:           cfg.NftHeight,
+		amountHeight:        cfg.AmountHeight,
+		reserveSenderHeight: cfg.ReserveSenderHeight,
+		ctx:                 ctx,
+		wg:                  wg,
 	}
 	return exp
 }

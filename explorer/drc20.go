@@ -81,13 +81,7 @@ func (e *Explorer) drc20Decode(tx *btcjson.TxRawResult, pushedData []byte, numbe
 
 	if card.Op == "transfer" {
 
-		txhash1, _ := chainhash.NewHashFromStr(txRawResult0.Vin[0].Txid)
-		txRawResult1, err := e.node.GetRawTransactionVerboseBool(txhash1)
-		if err != nil {
-			return nil, fmt.Errorf("%w: %v", CHAIN_NETWORK_ERR, err)
-		}
-
-		card.HolderAddress, err = outputAddress(txRawResult1, int(txRawResult0.Vin[0].Vout))
+		card.HolderAddress, err = e.commitSender(txRawResult0, number)
 		if err != nil {
 			return nil, err
 		}
