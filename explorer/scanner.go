@@ -69,6 +69,7 @@ type Explorer struct {
 	amountHeight  int64
 	// reserveSenderHeight gates commitSender's reserve check
 	reserveSenderHeight int64
+	prizeV1Height       int64
 
 	ctx context.Context
 	wg  *sync.WaitGroup
@@ -89,6 +90,7 @@ func NewExplorer(ctx context.Context, wg *sync.WaitGroup, rpcClient *rpcclient.C
 		nftHeight:           cfg.NftHeight,
 		amountHeight:        cfg.AmountHeight,
 		reserveSenderHeight: cfg.ReserveSenderHeight,
+		prizeV1Height:       cfg.PrizeV1Height,
 		ctx:                 ctx,
 		wg:                  wg,
 	}
@@ -468,6 +470,26 @@ func (e *Explorer) scanTx(tx string, txv *btcjson.TxRawResult) error {
 		err = e.executeNft(nft)
 		if err != nil {
 			return e.failTx(&models.NftInfo{}, nft.TxHash, err)
+		}
+
+	case "prize-v1":
+		if !activated(e.prizeV1Height, e.currentHeight) {
+			log.Trace("scanning", "prize-v1", "not activated", "txhash", txv.Txid)
+			return nil
+		}
+
+		prize, err := e.prizeDecode(txv, pushedData, e.currentHeight)
+		if err != nil {
+			if retryable(err) {
+				return fmt.Errorf("scan %s: %w", txv.Txid, err)
+			}
+			log.Error("scanning", "prizeDecode", err, "txhash", txv.Txid)
+			return nil
+		}
+
+		err = e.executePrize(prize)
+		if err != nil {
+			return e.failTx(&models.PrizeInfo{}, prize.TxHash, err)
 		}
 
 	default:

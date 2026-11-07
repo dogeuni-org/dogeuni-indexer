@@ -80,6 +80,13 @@ func (e *Explorer) fork(tx *gorm.DB, height int64) error {
 		return fmt.Errorf("FindDrc20Deploy error: %v", err)
 	}
 
+	// prize pools are recomputed from the ops that remain, so find the touched ones
+	// before delInfo drops their rows
+	prizePools, err := prizePoolsAbove(tx, height)
+	if err != nil {
+		return err
+	}
+
 	err = e.delInfo(tx, height)
 	if err != nil {
 		return err
@@ -151,6 +158,11 @@ func (e *Explorer) fork(tx *gorm.DB, height int64) error {
 	}
 
 	err = e.nftFork(tx, height)
+	if err != nil {
+		return err
+	}
+
+	err = e.prizeFork(tx, prizePools)
 	if err != nil {
 		return err
 	}
@@ -267,6 +279,14 @@ func (e *Explorer) delInfo(tx *gorm.DB, height int64) error {
 	err = tx.Where("block_number > ?", height).Delete(&models.InviteInfo{}).Error
 	if err != nil {
 		return fmt.Errorf("DeleteInviteInfo error: %v", err)
+	}
+
+	// prize-v1: pools and entitlements are recomputed by prizeFork
+	for _, m := range []interface{}{&models.PrizeInfo{}, &models.PrizeDeposit{}, &models.PrizeSettleEntry{}} {
+		err = tx.Where("block_number > ?", height).Delete(m).Error
+		if err != nil {
+			return fmt.Errorf("DeletePrize %T error: %v", m, err)
+		}
 	}
 	return nil
 }

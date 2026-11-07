@@ -51,6 +51,11 @@ func NewSqliteClient(cfg utils.SqliteConfig) *DBClient {
 		os.Exit(0)
 	}
 
+	if err := db.AutoMigrate(&models.PrizeInfo{}, &models.PrizePool{}, &models.PrizeEntitlement{}, &models.PrizeDeposit{}, &models.PrizeSettleEntry{}); err != nil {
+		fmt.Printf("AutoMigrate prize_v1 failed, err:%v  ", err)
+		os.Exit(0)
+	}
+
 	sqlDB, dbError := db.DB()
 	if dbError != nil {
 		fmt.Printf("get db failed,err:%v  ", dbError)
@@ -92,6 +97,11 @@ func NewMysqlClient(cfg utils.MysqlConfig) *DBClient {
 
 	if err := db.AutoMigrate(&models.StakeV2Info{}, &models.StakeV2Collect{}, &models.StakeV2CollectAddress{}, &models.StakeV2Revert{}, &models.NftRevert{}); err != nil {
 		fmt.Printf("AutoMigrate stake_v2/nft_revert failed, err:%v  ", err)
+		os.Exit(0)
+	}
+
+	if err := db.AutoMigrate(&models.PrizeInfo{}, &models.PrizePool{}, &models.PrizeEntitlement{}, &models.PrizeDeposit{}, &models.PrizeSettleEntry{}); err != nil {
+		fmt.Printf("AutoMigrate prize_v1 failed, err:%v  ", err)
 		os.Exit(0)
 	}
 
